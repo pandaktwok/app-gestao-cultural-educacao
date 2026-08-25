@@ -215,32 +215,64 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
     });
   };
 
-  const validateReport = () => {
-    if (!activitiesFocus.trim()) {
-      alert('Campo Obrigatório: Responda qual foi o foco dos ensaios na Seção 1.');
-      return false;
+  const validateReport = (isSilentAutoFill = false) => {
+    let focus = activitiesFocus.trim();
+    if (!focus) {
+      if (isSilentAutoFill) {
+        focus = 'Ensaios semanais focados em aprimoramento técnico e pedagógico dos alunos.';
+        setActivitiesFocus(focus);
+      } else {
+        alert('Campo Obrigatório: Responda qual foi o foco dos ensaios na Seção 1.');
+        return false;
+      }
     }
-    if (!impactIndicators.trim()) {
-      alert('Campo Obrigatório: Responda os indicadores de resultado na Seção 3.');
-      return false;
+    let impact = impactIndicators.trim();
+    if (!impact) {
+      if (isSilentAutoFill) {
+        impact = 'Avanço na disciplina, postura e engajamento da comunidade escolar.';
+        setImpactIndicators(impact);
+      } else {
+        alert('Campo Obrigatório: Responda os indicadores de resultado na Seção 3.');
+        return false;
+      }
     }
-    if (!monitoringEvaluation.trim()) {
-      alert('Campo Obrigatório: Responda como foi realizado o monitoramento e avaliação na Seção 4.');
-      return false;
+    let evalText = monitoringEvaluation.trim();
+    if (!evalText) {
+      if (isSilentAutoFill) {
+        evalText = 'Monitoramento realizado via controle diário de presenças e curadoria de fotos.';
+        setMonitoringEvaluation(evalText);
+      } else {
+        alert('Campo Obrigatório: Responda como foi realizado o monitoramento e avaliação na Seção 4.');
+        return false;
+      }
     }
     if (hasDifficulties) {
       if (!difficultiesDetails.trim()) {
-        alert('Campo Obrigatório: Descreva as dificuldades encontradas na Seção 5.');
-        return false;
+        if (isSilentAutoFill) {
+          setDifficultiesDetails(STANDARD_NO_DIFFICULTIES_TEXT);
+        } else {
+          alert('Campo Obrigatório: Descreva as dificuldades encontradas na Seção 5.');
+          return false;
+        }
       }
       if (!achievedResults.trim()) {
-        alert('Campo Obrigatório: Descreva as soluções adotadas na Seção 6.');
-        return false;
+        if (isSilentAutoFill) {
+          setAchievedResults(STANDARD_SOLUTIONS_NO_NEED_TEXT);
+        } else {
+          alert('Campo Obrigatório: Descreva as soluções adotadas na Seção 6.');
+          return false;
+        }
       }
     }
     if (attendanceSessions.length > 0 && selectedRehearsalIds.length < attendanceSessions.length) {
-      alert(`Trava de Validação Fotográfica: É obrigatório selecionar exatamente 1 foto para cada um dos ${attendanceSessions.length} atendimentos executados no mês.`);
-      return false;
+      if (isSilentAutoFill && rehearsalPhotos.length > 0) {
+        setSelectedRehearsalIds(rehearsalPhotos.map((p) => p.id));
+      } else if (!isSilentAutoFill) {
+        if (confirm(`Atenção: Existem ${attendanceSessions.length} atendimentos executados, mas apenas ${selectedRehearsalIds.length} foto(s) selecionada(s). Deseja gerar o PDF com as fotos disponíveis?`)) {
+          return true;
+        }
+        return false;
+      }
     }
     return true;
   };
@@ -276,7 +308,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   };
 
   const handleSaveReport = async () => {
-    if (!validateReport()) return;
+    if (!validateReport(false)) return;
     setLoading(true);
     try {
       if (isOnline()) {
@@ -311,30 +343,40 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   };
 
   const handleExportPDF = async () => {
-    if (!validateReport()) return;
+    if (!validateReport(true)) return;
     setPdfGenerating(true);
     try {
       if (typeof window !== 'undefined') {
-        const html2pdf = (await import('html2pdf.js')).default;
+        const html2pdfModule = await import('html2pdf.js');
+        const html2pdf = html2pdfModule.default || html2pdfModule;
         const element = reportRef.current;
         if (element) {
+          const sanitizedSchoolName = (schoolData?.name || schoolNameFormatted || 'Escola')
+            .replace(/[^a-zA-Z0-9_-]/g, '_');
           const opt = {
-            margin: [0.4, 0.4, 0.4, 0.4],
-            filename: `Relatorio_Mensal_${schoolData?.name || 'Escola'}_${monthYear}.pdf`,
+            margin: [0.3, 0.3, 0.3, 0.3],
+            filename: `Relatorio_Mensal_${sanitizedSchoolName}_${monthYear}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
               scale: 2,
               useCORS: true,
+              allowTaint: true,
+              logging: false,
               ignoreElements: (el: Element) => el.classList.contains('pdf-exclude')
             },
             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
           };
           await html2pdf().set(opt).from(element).save();
+          alert('✅ Relatório PDF gerado e baixado com sucesso!');
+        } else {
+          throw new Error('Elemento de visualização do relatório não encontrado.');
         }
       }
       onComplete(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating PDF:', err);
+      alert('Iniciando modo de impressão/salvar como PDF nativo do navegador...');
+      window.print();
     } finally {
       setPdfGenerating(false);
     }
@@ -466,7 +508,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
             </div>
           </div>
 
-          {/* Primary Action Button */}
+          {/* Primary Action Buttons */}
           <div className="pt-2 flex flex-col sm:flex-row items-center gap-4">
             <button
               type="button"
@@ -474,11 +516,21 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
               className="w-full sm:w-auto px-8 py-4 rounded-full font-black text-sm bg-charcoal text-white hover:bg-black transition shadow-xl flex items-center justify-center gap-3 group active:scale-95 cursor-pointer"
             >
               <Play size={18} fill="white" className="group-hover:scale-110 transition" />
-              Iniciar Relatório
+              Iniciar Relatório (Assistente)
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              disabled={pdfGenerating}
+              className="w-full sm:w-auto px-6 py-4 rounded-full font-black text-sm bg-amber-400 text-black hover:bg-amber-500 transition shadow-xl flex items-center justify-center gap-2 group active:scale-95 cursor-pointer"
+            >
+              <Download size={18} className="group-hover:scale-110 transition" />
+              {pdfGenerating ? 'Gerando PDF...' : 'Download PDF Direto'}
             </button>
 
             <p className="text-xs text-gray-500 font-medium">
-              * Clique para responder ao assistente de 7 etapas e gerar o documento oficial.
+              * Responda ao assistente de 7 etapas ou gere o documento PDF oficial diretamente.
             </p>
           </div>
         </div>
@@ -1236,6 +1288,235 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                   <Download size={15} /> {pdfGenerating ? 'Gerando PDF...' : 'Download PDF Final'}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Printable PDF Container for Instant Export from any step or initial screen */}
+      {(!isWizardOpen || currentStep !== 7) && (
+        <div className="fixed -left-[9999px] top-0 pointer-events-none opacity-0 z-[-1]" aria-hidden="true">
+          <div
+            ref={reportRef}
+            className="bg-white border-2 border-gray-300 rounded-2xl p-8 space-y-6 text-gray-900 font-sans"
+            style={{ width: '800px' }}
+          >
+            {/* Institutional Header */}
+            <div className="border-b-2 border-amber-500 pb-4 flex items-start justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-800">
+                  Relatório Mensal Institucional de Prestação de Contas
+                </span>
+                <h2 className="text-xl font-black text-gray-950 tracking-tight leading-tight">
+                  {projectTitle}
+                </h2>
+                <p className="text-xs font-bold text-gray-700 mt-0.5">{fundingAgreementNo}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-xs font-bold text-gray-600 block">{grantorName}</span>
+                <p className="text-xs font-extrabold text-amber-900 bg-amber-100 px-3 py-1 rounded-full inline-block mt-1">
+                  Mês: {referenceMonthLabel || monthYear}
+                </p>
+              </div>
+            </div>
+
+            {/* Section 1 Render */}
+            <div className="space-y-1">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                1. Descrição das Atividades Executadas
+              </h3>
+              <p className="text-xs text-gray-800 bg-gray-50 p-3 rounded-xl border font-medium leading-relaxed">
+                Ensaios semanais com foco em {activitiesFocus || 'aprimoramento técnico e pedagógico'}.
+              </p>
+            </div>
+
+            {/* Section 2 Render */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                2. Público Beneficiário (Tabela Comparativa)
+              </h3>
+              <table className="w-full text-[11px] text-left border">
+                <thead className="bg-gray-100 text-gray-800 font-bold border-b">
+                  <tr>
+                    <th className="p-2 border-r">Atividade</th>
+                    <th className="p-2 border-r">Escola Atendida</th>
+                    <th className="p-2 text-right">Público / Alunos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {attendanceSessions.map((session, i) => (
+                    <tr key={session.id}>
+                      <td className="p-2 border-r font-bold">
+                        {i + 1}º ensaio - {session.category || 'Ensaio'} ({formatDateStr(session.date)})
+                      </td>
+                      <td className="p-2 border-r">{schoolNameFormatted}</td>
+                      <td className="p-2 text-right font-black">{session.countPresent} alunos</td>
+                    </tr>
+                  ))}
+                  {eventSessions.map((ev) => (
+                    <tr key={ev.id} className="bg-amber-50/40">
+                      <td className="p-2 border-r font-bold">🎉 Evento: {ev.name}</td>
+                      <td className="p-2 border-r">{ev.locationAddress || schoolNameFormatted}</td>
+                      <td className="p-2 text-right font-black">
+                        {eventPublicCounts[ev.id] || 0} pessoas
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Nominata de Alunos */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                Anexo: Nominata Nominal de Alunos Atendidos ({activeStudents.length} Ativos)
+              </h3>
+              <table className="w-full text-[10px] text-left border">
+                <thead className="bg-gray-100 text-gray-800 font-bold border-b">
+                  <tr>
+                    <th className="p-1.5 border-r w-10 text-center">Nº</th>
+                    <th className="p-1.5 border-r">Nome Completo do Aluno</th>
+                    <th className="p-1.5 border-r w-16 text-center">Idade</th>
+                    <th className="p-1.5 border-r w-16 text-center">Sexo</th>
+                    <th className="p-1.5 text-center w-24">Status no Mês</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {activeStudents.map((student, index) => (
+                    <tr key={student.id}>
+                      <td className="p-1.5 border-r text-center font-bold text-gray-500">{index + 1}</td>
+                      <td className="p-1.5 border-r font-bold text-gray-900">{student.name}</td>
+                      <td className="p-1.5 border-r text-center">{student.age} anos</td>
+                      <td className="p-1.5 border-r text-center">{student.gender === 'M' ? 'Masculino' : 'Feminino'}</td>
+                      <td className="p-1.5 text-center font-bold text-emerald-800 bg-emerald-50">ATIVO</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Section 3 & 4 Render */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                  3. Indicadores de Resultado & Impacto
+                </h3>
+                <p className="text-xs text-gray-800 bg-gray-50 p-3 rounded-xl border font-medium">
+                  {impactIndicators || 'Indicadores de evolução pedagógica mantidos.'}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                  4. Monitoramento & Avaliação
+                </h3>
+                <p className="text-xs text-gray-800 bg-gray-50 p-3 rounded-xl border font-medium">
+                  {monitoringEvaluation || 'Acompanhamento de frequência e assiduidade mantidos.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Section 5 & 6 Render */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                5 & 6. Dificuldades Encontradas & Soluções Adotadas
+              </h3>
+              <div className="p-3 bg-gray-50 rounded-xl border text-xs space-y-2">
+                <p className="font-semibold text-gray-800">
+                  <strong>Dificuldades:</strong> {hasDifficulties ? difficultiesDetails : STANDARD_NO_DIFFICULTIES_TEXT}
+                </p>
+                <p className="font-semibold text-gray-800 border-t pt-1">
+                  <strong>Soluções Adotadas:</strong> {!hasDifficulties ? STANDARD_SOLUTIONS_NO_NEED_TEXT : achievedResults}
+                </p>
+              </div>
+            </div>
+
+            {/* Section 7 Render: Photo Grid */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                7. Curadoria Fotográfica dos Ensaios & Eventos
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                {selectedRehearsalList.map((photo, i) => {
+                  const photoDate = photo.originalTimestamp || photo.date || photo.createdAt;
+                  const times = formatTimeStr(photoDate);
+                  return (
+                    <div key={i} className="border p-2 rounded-xl space-y-1.5 bg-white">
+                      <img src={photo.photoUrl} alt="Ensaio" className="w-full h-36 object-cover rounded-lg" />
+                      <div className="bg-amber-50 p-2 rounded-lg text-[10px] font-mono leading-tight">
+                        <p className="font-black text-gray-900">{formatDateStr(photoDate)} das {times.start} às {times.end}</p>
+                        <p className="text-gray-700 font-bold">Ensaio • {schoolNameFormatted}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {selectedEventPhotoList.map((item, i) => {
+                  const photoDate = item.photo.createdAt || item.event.date;
+                  const times = formatTimeStr(photoDate);
+                  return (
+                    <div key={i} className="border p-2 rounded-xl space-y-1.5 bg-white">
+                      <img src={item.photo.photoUrl} alt="Evento" className="w-full h-36 object-cover rounded-lg" />
+                      <div className="bg-indigo-50 p-2 rounded-lg text-[10px] font-mono leading-tight">
+                        <p className="font-black text-gray-900">{formatDateStr(photoDate)} das {times.start} às {times.end}</p>
+                        <p className="text-gray-700 font-bold">Evento: {item.event.name} • {schoolNameFormatted}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CONSOLIDATED INSTITUTIONAL FOOTER */}
+            <div className="pt-6 border-t-2 border-gray-900 space-y-4 text-xs font-medium text-gray-800">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-xl border">
+                <div>
+                  <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Mês de Referência</span>
+                  <span className="font-black text-gray-900">{referenceMonthLabel}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Local e Data</span>
+                  <span className="font-black text-gray-900">{locationCityDate}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Instrutor / Professor</span>
+                  <span className="font-black text-gray-900">{instructorNameFormatted}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Escolas Atendidas</span>
+                  <span className="font-bold text-gray-900">
+                    {teacherSchools.length > 0
+                      ? teacherSchools.map((s) => s.name).join(', ')
+                      : schoolNameFormatted}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Diretoria / Gestão</span>
+                  <span className="font-bold text-gray-900">{schoolData?.directorName || directorNameFormatted}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Responsável Técnico</span>
+                  <span className="font-bold text-gray-900">{responsibleName}</span>
+                </div>
+              </div>
+
+              {/* Dupla Assinatura */}
+              <div className="pt-8 border-t border-gray-300 grid grid-cols-2 gap-8 text-center">
+                <div className="space-y-1">
+                  <div className="w-full border-b border-gray-900 mb-2 mx-auto" />
+                  <p className="font-black text-xs text-gray-900">{instructorNameFormatted}</p>
+                  <p className="text-[10px] text-gray-600 font-bold">CPF: {teacherData?.cpf || '111.222.333-44'}</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase">Professor / Instrutor do Projeto</p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="w-full border-b border-gray-900 mb-2 mx-auto" />
+                  <p className="font-black text-xs text-gray-900">{schoolData?.directorName || directorNameFormatted || 'Direção Escolar'}</p>
+                  <p className="text-[10px] text-gray-600 font-bold">Diretora / Gestão Escolar</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase">{schoolNameFormatted}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
