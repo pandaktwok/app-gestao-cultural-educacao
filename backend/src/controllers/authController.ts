@@ -27,6 +27,8 @@ export const seedAdminIfEmpty = async () => {
         data: {
           name: 'Administrador Geral',
           email: 'admin@projeto.org',
+          cpf: '000.000.000-00',
+          phone: '(11) 99999-9999',
           password: hashedPassword,
           role: 'ADMIN',
           mustChangePassword: false,
@@ -34,7 +36,7 @@ export const seedAdminIfEmpty = async () => {
           initialAvatar: 'AD',
         },
       });
-      console.log('✅ Admin inicial criado: admin@projeto.org / admin123');
+      console.log('✅ Admin inicial criado: CPF 000.000.000-00 / Senha admin123');
     }
   } catch (err) {
     console.error('Error seeding initial admin:', err);
@@ -42,28 +44,48 @@ export const seedAdminIfEmpty = async () => {
 };
 
 export const login = async (req: AuthRequest, res: Response) => {
-  const { email, password } = req.body;
+  const { email, cpf, password } = req.body;
+  const loginInput = cpf || email;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+  if (!loginInput || !password) {
+    return res.status(400).json({ error: 'CPF/E-mail e senha são obrigatórios' });
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
+    const cleanInput = loginInput.trim();
+    const cleanCpfDigits = cleanInput.replace(/\D/g, '');
+
+    let user = null;
+    if (cleanCpfDigits.length === 11) {
+      // Find by CPF (with or without mask)
+      user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { cpf: cleanInput },
+            { cpf: cleanCpfDigits },
+            { cpf: cleanInput.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') },
+          ],
+        },
+      });
+    }
 
     if (!user) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      user = await prisma.user.findUnique({
+        where: { email: cleanInput.toLowerCase() },
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciais inválidas. Verifique o CPF/E-mail e senha.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      return res.status(401).json({ error: 'Credenciais inválidas. Verifique a senha.' });
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, cpf: user.cpf, role: user.role },
       ENV.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -74,6 +96,8 @@ export const login = async (req: AuthRequest, res: Response) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        cpf: user.cpf,
+        phone: user.phone,
         role: user.role,
         mustChangePassword: user.mustChangePassword,
         avatarColor: user.avatarColor,
@@ -110,6 +134,8 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
+        cpf: updatedUser.cpf,
+        phone: updatedUser.phone,
         role: updatedUser.role,
         mustChangePassword: false,
       },
@@ -121,18 +147,37 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 };
 
 export const createUser = async (req: AuthRequest, res: Response) => {
-  const { name, email, role, schoolIds } = req.body;
+  const { name, email, cpf, phone, role, schoolIds } = req.body;
 
-  if (!name || !email) {
-    return res.status(400).json({ error: 'Nome e email são obrigatórios' });
+  if (!name || !email || !cpf) {
+    return res.status(400).json({ error: 'Nome, e-mail e CPF são obrigatórios' });
   }
 
+  const cleanCpfDigits = cpf.replace(/\D/g, '');
+  if (cleanCpfDigits.length !== 11) {
+    return res.status(400).json({ error: 'CPF inválido. Deve conter 11 dígitos no formato 000.000.000-00' });
+  }
+
+  const formattedCpf = cleanCpfDigits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+
   try {
-    const existing = await prisma.user.findUnique({
+    const existingEmail = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
     });
-    if (existing) {
-      return res.status(400).json({ error: 'Email já cadastrado no sistema' });
+    if (existingEmail) {
+      return res.status(400).json({ error: 'E-mail já cadastrado no sistema' });
+    }
+
+    const existingCpf = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { cpf: formattedCpf },
+          { cpf: cleanCpfDigits },
+        ],
+      },
+    });
+    if (existingCpf) {
+      return res.status(400).json({ error: 'CPF já cadastrado no sistema' });
     }
 
     // Generate temporary password
@@ -146,6 +191,8 @@ export const createUser = async (req: AuthRequest, res: Response) => {
       data: {
         name,
         email: email.toLowerCase().trim(),
+        cpf: formattedCpf,
+        phone: phone || null,
         password: hashedPassword,
         role: userRole,
         mustChangePassword: true,
@@ -171,6 +218,8 @@ export const createUser = async (req: AuthRequest, res: Response) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
+        cpf: newUser.cpf,
+        phone: newUser.phone,
         role: newUser.role,
         avatarColor: newUser.avatarColor,
         initialAvatar: newUser.initialAvatar,
@@ -190,6 +239,8 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
         id: true,
         name: true,
         email: true,
+        cpf: true,
+        phone: true,
         role: true,
         mustChangePassword: true,
         avatarColor: true,

@@ -7,10 +7,11 @@ export const createAttendanceSession = async (req: AuthRequest, res: Response) =
   const {
     date,
     type, // 'MANUAL' | 'EXTERNAL'
+    category, // 'Ensaio' | 'Reposição' | 'Reforço'
     schoolId,
     countPresent,
     countAbsent,
-    records, // Array of { studentId, isPresent } for MANUAL
+    records, // Array of { studentId, isPresent, justification } for MANUAL
     photoListUrl,
     pdfListUrl,
   } = req.body;
@@ -32,10 +33,13 @@ export const createAttendanceSession = async (req: AuthRequest, res: Response) =
       calculatedAbsent = records.filter((r: any) => !r.isPresent).length;
     }
 
+    const validCategory = ['Ensaio', 'Reposição', 'Reforço'].includes(category) ? category : 'Ensaio';
+
     const session = await prisma.attendanceSession.create({
       data: {
         date: sessionDate,
         type: type === 'EXTERNAL' ? 'EXTERNAL' : 'MANUAL',
+        category: validCategory,
         schoolId,
         teacherId,
         countPresent: calculatedPresent,
@@ -49,6 +53,7 @@ export const createAttendanceSession = async (req: AuthRequest, res: Response) =
                   data: records.map((r: any) => ({
                     studentId: r.studentId,
                     isPresent: !!r.isPresent,
+                    justification: r.justification || null,
                   })),
                 },
               }
@@ -59,7 +64,7 @@ export const createAttendanceSession = async (req: AuthRequest, res: Response) =
       },
     });
 
-    return res.status(201).json(session);
+    return res.json(session);
   } catch (error) {
     console.error('Error creating attendance session:', error);
     return res.status(500).json({ error: 'Erro ao registrar chamada' });

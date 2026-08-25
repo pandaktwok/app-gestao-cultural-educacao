@@ -5,12 +5,14 @@ import {
   updateSchool,
   deleteSchool,
   endVisit,
+  getSchoolDetails,
 } from '../controllers/schoolController.js';
 import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
 router.get('/', authenticateToken, getSchools);
+router.get('/:id/details', authenticateToken, getSchoolDetails);
 router.post('/', authenticateToken, requireAdmin, createSchool);
 router.post('/:id/end-visit', authenticateToken, endVisit);
 router.put('/:id', authenticateToken, requireAdmin, updateSchool);

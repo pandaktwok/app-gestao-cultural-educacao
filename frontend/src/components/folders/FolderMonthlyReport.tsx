@@ -66,6 +66,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   const [schoolData, setSchoolData] = useState<any>(null);
   const [teacherData, setTeacherData] = useState<any>(null);
   const [teacherSchools, setTeacherSchools] = useState<any[]>([]);
+  const [studentsList, setStudentsList] = useState<any[]>([]);
   const [attendanceSessions, setAttendanceSessions] = useState<any[]>([]);
   const [rehearsalPhotos, setRehearsalPhotos] = useState<any[]>([]);
   const [eventSessions, setEventSessions] = useState<any[]>([]);
@@ -84,12 +85,16 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   const fetchData = async () => {
     try {
       if (isOnline()) {
-        const [historyRes, reportRes] = await Promise.all([
+        const [historyRes, reportRes, studentsRes] = await Promise.all([
           api.get(`/sessions/school/${schoolId}`),
-          api.get(`/reports/monthly?schoolId=${schoolId}&monthYear=08_2026`)
+          api.get(`/reports/monthly?schoolId=${schoolId}&monthYear=08_2026`),
+          api.get(`/students/school/${schoolId}`)
         ]);
 
         setSchoolData(historyRes.data.school);
+        if (Array.isArray(studentsRes.data)) {
+          setStudentsList(studentsRes.data);
+        }
         const rehearsals = historyRes.data.rehearsalPhotos || [];
         const events = historyRes.data.eventSessions || [];
         const sessions = historyRes.data.attendanceSessions || [];
@@ -274,6 +279,8 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   };
 
   // Helpers
+  const activeStudents = studentsList.filter((s) => s.status === 'ACTIVE');
+
   const formatDateStr = (dateInput: any) => {
     if (!dateInput) return '20/08/2026';
     const d = new Date(dateInput);
@@ -934,7 +941,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                           {attendanceSessions.map((session, i) => (
                             <tr key={session.id}>
                               <td className="p-2 border-r font-bold">
-                                {i + 1}º ensaio ({formatDateStr(session.date)})
+                                {i + 1}º ensaio - {session.category || 'Ensaio'} ({formatDateStr(session.date)})
                               </td>
                               <td className="p-2 border-r">{schoolNameFormatted}</td>
                               <td className="p-2 text-right font-black">{session.countPresent} alunos</td>
@@ -947,6 +954,35 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                               <td className="p-2 text-right font-black">
                                 {eventPublicCounts[ev.id] || 0} pessoas
                               </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Nominata de Alunos (Lista Nominal Completa de Ativos no Mês) */}
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
+                        Anexo: Nominata Nominal de Alunos Atendidos ({activeStudents.length} Ativos)
+                      </h3>
+                      <table className="w-full text-[10px] text-left border">
+                        <thead className="bg-gray-100 text-gray-800 font-bold border-b">
+                          <tr>
+                            <th className="p-1.5 border-r w-10 text-center">Nº</th>
+                            <th className="p-1.5 border-r">Nome Completo do Aluno</th>
+                            <th className="p-1.5 border-r w-16 text-center">Idade</th>
+                            <th className="p-1.5 border-r w-16 text-center">Sexo</th>
+                            <th className="p-1.5 text-center w-24">Status no Mês</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {activeStudents.map((student, index) => (
+                            <tr key={student.id}>
+                              <td className="p-1.5 border-r text-center font-bold text-gray-500">{index + 1}</td>
+                              <td className="p-1.5 border-r font-bold text-gray-900">{student.name}</td>
+                              <td className="p-1.5 border-r text-center">{student.age} anos</td>
+                              <td className="p-1.5 border-r text-center">{student.gender === 'M' ? 'Masculino' : 'Feminino'}</td>
+                              <td className="p-1.5 text-center font-bold text-emerald-800 bg-emerald-50">ATIVO</td>
                             </tr>
                           ))}
                         </tbody>

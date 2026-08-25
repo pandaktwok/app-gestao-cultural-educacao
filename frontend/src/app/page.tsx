@@ -29,7 +29,7 @@ interface SchoolItem {
 
 export default function HomePage() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [email, setEmail] = useState('');
+  const [loginInput, setLoginInput] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState(true);
@@ -98,11 +98,24 @@ export default function HomePage() {
     }
   };
 
+  const handleCpfInputChange = (val: string) => {
+    // If user types raw digits or mask
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    if (digits.length > 0 && !val.includes('@')) {
+      if (digits.length <= 3) setLoginInput(digits);
+      else if (digits.length <= 6) setLoginInput(`${digits.slice(0, 3)}.${digits.slice(3)}`);
+      else if (digits.length <= 9) setLoginInput(`${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`);
+      else setLoginInput(`${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`);
+    } else {
+      setLoginInput(val);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const res = await api.post('/auth/login', { cpf: loginInput, email: loginInput, password });
       const { token, user: loggedUser } = res.data;
 
       localStorage.setItem('cultural_token', token);
@@ -163,19 +176,19 @@ export default function HomePage() {
               GC
             </div>
             <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Gestão Cultural & Prestação de Contas</h1>
-            <p className="text-xs text-gray-500 font-medium">Acesse sua conta para registrar presenças e fotos dos projetos.</p>
+            <p className="text-xs text-gray-500 font-medium">Acesse com seu CPF e senha para registrar presenças e fotos.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-extrabold text-gray-700 mb-1">E-mail</label>
+              <label className="block text-xs font-extrabold text-gray-700 mb-1">CPF (ou E-mail)</label>
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu.email@projeto.org"
-                className="w-full p-3.5 rounded-2xl border text-sm font-medium focus:ring-2 focus:ring-charcoal focus:outline-none bg-gray-50"
+                value={loginInput}
+                onChange={(e) => handleCpfInputChange(e.target.value)}
+                placeholder="000.000.000-00"
+                className="w-full p-3.5 rounded-2xl border text-sm font-medium focus:ring-2 focus:ring-charcoal focus:outline-none bg-gray-50 tracking-wider"
               />
             </div>
 
@@ -202,8 +215,9 @@ export default function HomePage() {
 
           <div className="text-center border-t pt-4">
             <p className="text-[11px] text-gray-400 font-bold">
-              Primeiro Acesso Administrador: <br />
-              <code className="text-gray-700">admin@projeto.org</code> / <code className="text-gray-700">admin123</code>
+              Credenciais de Teste: <br />
+              <span className="text-gray-700">Admin:</span> CPF <code className="text-gray-800">000.000.000-00</code> / <code className="text-gray-800">admin123</code> <br />
+              <span className="text-gray-700">Professor:</span> CPF <code className="text-gray-800">111.222.333-44</code> / <code className="text-gray-800">prof123</code>
             </p>
           </div>
         </div>

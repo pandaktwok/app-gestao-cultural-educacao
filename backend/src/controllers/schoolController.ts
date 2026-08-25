@@ -15,7 +15,7 @@ function getRandomColor(): string {
 }
 
 export const createSchool = async (req: AuthRequest, res: Response) => {
-  const { name, boardName, address, logoUrl } = req.body;
+  const { name, boardName, directorName, phone, email, address, logoUrl } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Nome da escola é obrigatório' });
@@ -29,6 +29,9 @@ export const createSchool = async (req: AuthRequest, res: Response) => {
       data: {
         name,
         boardName: boardName || null,
+        directorName: directorName || null,
+        phone: phone || null,
+        email: email || null,
         address: address || null,
         logoUrl: logoUrl || null,
         initialAvatar: initials,
@@ -56,7 +59,7 @@ export const getSchools = async (req: AuthRequest, res: Response) => {
           teacherSchools: {
             include: {
               teacher: {
-                select: { id: true, name: true, email: true, avatarColor: true },
+                select: { id: true, name: true, email: true, cpf: true, phone: true, avatarColor: true },
               },
             },
           },
@@ -97,7 +100,7 @@ export const getSchools = async (req: AuthRequest, res: Response) => {
 
 export const updateSchool = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { name, boardName, address, logoUrl } = req.body;
+  const { name, boardName, directorName, phone, email, address, logoUrl } = req.body;
 
   try {
     const data: any = {};
@@ -106,6 +109,9 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
       data.initialAvatar = getInitials(name);
     }
     if (boardName !== undefined) data.boardName = boardName;
+    if (directorName !== undefined) data.directorName = directorName;
+    if (phone !== undefined) data.phone = phone;
+    if (email !== undefined) data.email = email;
     if (address !== undefined) data.address = address;
     if (logoUrl !== undefined) data.logoUrl = logoUrl;
 
@@ -149,6 +155,98 @@ export const endVisit = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error ending visit:', error);
     return res.status(500).json({ error: 'Erro ao encerrar visita da escola' });
+  }
+};
+
+export const getSchoolDetails = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const school = await prisma.school.findUnique({
+      where: { id },
+      include: {
+        teacherSchools: {
+          include: {
+            teacher: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                cpf: true,
+                phone: true,
+                avatarColor: true,
+                initialAvatar: true,
+              },
+            },
+          },
+        },
+        students: {
+          orderBy: [{ status: 'asc' }, { name: 'asc' }],
+        },
+        attendanceSessions: {
+          include: {
+            attendanceRecords: true,
+          },
+          orderBy: { date: 'desc' },
+        },
+        eventSessions: {
+          include: {
+            photos: true,
+          },
+          orderBy: { date: 'desc' },
+        },
+      },
+    });
+
+    if (!school) {
+      return res.status(404).json({ error: 'Escola não encontrada' });
+    }
+
+    // Calculate Donut Chart stats
+    let totalPresentRecords = 0;
+    let totalAbsentRecords = 0;
+
+    school.attendanceSessions.forEach((session) => {
+      totalPresentRecords += session.countPresent;
+      totalAbsentRecords += session.countAbsent;
+    });
+
+    const activeStudents = school.students.filter((s) => s.status === 'ACTIVE');
+    const dropoutStudents = school.students.filter((s) => s.status === 'DROPOUT');
+
+    const totalAttendanceOps = totalPresentRecords + totalAbsentRecords;
+    const overallPresenceRate = totalAttendanceOps > 0
+      ? Math.round((totalPresentRecords / totalAttendanceOps) * 100)
+      : 100;
+
+    return res.json({
+      school: {
+        id: school.id,
+        name: school.name,
+        boardName: school.boardName,
+        directorName: school.directorName,
+        phone: school.phone,
+        email: school.email,
+        address: school.address,
+        logoUrl: school.logoUrl,
+        themeColor: school.themeColor,
+        initialAvatar: school.initialAvatar,
+      },
+      assignedTeachers: school.teacherSchools.map((ts) => ts.teacher),
+      stats: {
+        totalPresentRecords,
+        totalAbsentRecords,
+        activeCount: activeStudents.length,
+        dropoutCount: dropoutStudents.length,
+        overallPresenceRate,
+      },
+      students: school.students,
+      events: school.eventSessions,
+      sessions: school.attendanceSessions,
+    });
+  } catch (error) {
+    console.error('Error fetching school details:', error);
+    return res.status(500).json({ error: 'Erro ao carregar detalhes da escola' });
   }
 };
 
