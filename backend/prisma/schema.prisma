@@ -1,0 +1,178 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String   @id @default(uuid())
+  name               String
+  email              String   @unique
+  password           String
+  role               String   @default("TEACHER")
+  mustChangePassword Boolean  @default(true)
+  avatarColor        String   @default("#8F94FB")
+  initialAvatar      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  teacherSchools     TeacherSchool[]
+  attendanceSessions AttendanceSession[]
+  rehearsalPhotos    RehearsalPhoto[]
+  eventSessions      EventSession[]
+  monthlyReports     MonthlyReport[]
+}
+
+model School {
+  id            String   @id @default(uuid())
+  name          String
+  boardName     String?
+  address       String?
+  logoUrl       String?
+  initialAvatar String?
+  themeColor    String   @default("#3D8A7E")
+  lastVisitEndTimestamp DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  teacherSchools     TeacherSchool[]
+  students           Student[]
+  attendanceSessions AttendanceSession[]
+  rehearsalPhotos    RehearsalPhoto[]
+  eventSessions      EventSession[]
+  monthlyReports     MonthlyReport[]
+}
+
+model TeacherSchool {
+  id        String   @id @default(uuid())
+  teacherId String
+  schoolId  String
+  createdAt DateTime @default(now())
+
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, schoolId])
+}
+
+model Student {
+  id          String    @id @default(uuid())
+  name        String
+  age         Int
+  gender      String    // 'M' or 'F'
+  status      String    @default("ACTIVE") // 'ACTIVE' or 'DROPOUT'
+  dropoutDate DateTime?
+  schoolId    String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  school             School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  attendanceRecords  AttendanceRecord[]
+}
+
+model AttendanceSession {
+  id           String   @id @default(uuid())
+  date         DateTime
+  type         String   @default("MANUAL") // 'MANUAL' or 'EXTERNAL'
+  schoolId     String
+  teacherId    String
+  countPresent Int      @default(0)
+  countAbsent  Int      @default(0)
+  photoListUrl String?
+  pdfListUrl   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  attendanceRecords AttendanceRecord[]
+}
+
+model AttendanceRecord {
+  id                  String  @id @default(uuid())
+  attendanceSessionId String
+  studentId           String
+  isPresent           Boolean @default(true)
+
+  attendanceSession AttendanceSession @relation(fields: [attendanceSessionId], references: [id], onDelete: Cascade)
+  student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([attendanceSessionId, studentId])
+}
+
+model RehearsalPhoto {
+  id                String    @id @default(uuid())
+  date              DateTime
+  originalTimestamp DateTime?
+  photoUrl          String
+  googleDriveFileId String?
+  schoolId          String
+  teacherId         String
+  createdAt         DateTime  @default(now())
+
+  school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model EventSession {
+  id                    String   @id @default(uuid())
+  name                  String
+  date                  DateTime
+  locationAddress       String?
+  googleCalendarEventId String?
+  schoolId              String
+  teacherId             String
+  createdAt             DateTime @default(now())
+
+  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher User         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  photos  EventPhoto[]
+}
+
+model EventPhoto {
+  id                String   @id @default(uuid())
+  eventSessionId    String
+  photoUrl          String
+  googleDriveFileId String?
+  createdAt         DateTime @default(now())
+
+  eventSession EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
+}
+
+model MonthlyReport {
+  id                      String   @id @default(uuid())
+  monthYear               String   // Format: MM_AAAA (e.g. "08_2026")
+  schoolId                String
+  teacherId               String
+  projectTitle            String   @default("Projeto Cultural")
+  grantorName             String   @default("Órgão Concedente")
+  fundingAgreementNo      String   @default("001/2026")
+  responsibleName         String   @default("Coordenação Geral")
+  activitiesFocus         String?  // Seção 1
+  eventPublicCounts       String?  // Seção 2: JSON mapping eventId -> count
+  impactIndicators        String?  // Seção 3
+  monitoringEvaluation    String?  // Seção 4
+  hasDifficulties         Boolean  @default(false) // Seção 5
+  difficultiesDetails     String?
+  achievedResults         String?  // Seção 6
+  standardTextUsed        Boolean  @default(true)
+  selectedRehearsalPhotos  String?  // JSON array of RehearsalPhoto IDs
+  selectedEventPhotos      String?  // JSON array of EventPhoto IDs
+  referenceMonthLabel     String?  // e.g. "Junho/Julho"
+  locationCityDate        String?  // e.g. "São Paulo - SP, 23/08/2026"
+  pdfUrl                  String?
+  googleDriveFileId       String?
+  adminFeedback           String?  // JSON array of admin questions/comments
+  status                  String   @default("DRAFT") // 'DRAFT', 'SUBMITTED', 'REVISION_REQUESTED', 'SYNCED'
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, teacherId, monthYear])
+}

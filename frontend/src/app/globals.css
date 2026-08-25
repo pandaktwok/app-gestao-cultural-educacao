@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #F7F5F0;
+  --charcoal: #1E1E24;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: var(--bg-main);
+  color: var(--charcoal);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(30, 30, 36, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(30, 30, 36, 0.4);
+}
+
+/* Bento UI Utilities */
+.bento-card {
+  background: #FFFFFF;
+  border-radius: 28px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.bento-card:hover {
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.08);
+}
+
+.bento-pill-btn {
+  background-color: #1E1E24;
+  color: #FFFFFF;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.bento-pill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(30, 30, 36, 0.25);
+}
+
+.bento-pill-btn:active {
+  transform: scale(0.98);
+}
+
+/* Smooth Accordion Stacked Folders Transition */
+.folder-header {
+  cursor: pointer;
+  user-select: none;
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.folder-header:hover {
+  filter: brightness(0.97);
+}

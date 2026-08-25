@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cultural_app_db
+    restart: always
+    environment:
+      POSTGRES_USER: cultural_user
+      POSTGRES_PASSWORD: cultural_password
+      POSTGRES_DB: cultural_projects_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cultural_user -d cultural_projects_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cultural_app_backend
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: development
+      DATABASE_URL: postgresql://cultural_user:cultural_password@db:5432/cultural_projects_db?schema=public
+      JWT_SECRET: supersecret_jwt_cultural_projects_2026_key
+      GOOGLE_DRIVE_CREDENTIALS_PATH: ./config/credentials.json
+      GOOGLE_DRIVE_PARENT_FOLDER_ID: root_drive_folder_id_placeholder
+    volumes:
+      - ./backend/config:/app/config
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cultural_app_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
