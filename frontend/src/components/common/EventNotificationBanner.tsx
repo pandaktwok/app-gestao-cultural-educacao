@@ -36,14 +36,19 @@ export const EventNotificationBanner: React.FC<{ activeSchoolId?: string }> = ({
         }
       }
 
-      // Find nearest event in future or recent
+      // Filter strictly future events (event date >= start of current date)
       const now = new Date();
-      const sorted = events
-        .map((e) => ({ ...e, parsedDate: new Date(e.date) }))
-        .sort((a, b) => Math.abs(a.parsedDate.getTime() - now.getTime()) - Math.abs(b.parsedDate.getTime() - now.getTime()));
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-      if (sorted.length > 0) {
-        setUpcomingEvent(sorted[0]);
+      const futureEvents = events
+        .map((e) => ({ ...e, parsedDate: new Date(e.date) }))
+        .filter((e) => !isNaN(e.parsedDate.getTime()) && e.parsedDate.getTime() >= startOfToday)
+        .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
+
+      if (futureEvents.length > 0) {
+        setUpcomingEvent(futureEvents[0]);
+      } else {
+        setUpcomingEvent(null);
       }
     } catch (err) {
       console.error('Error fetching upcoming event for banner:', err);

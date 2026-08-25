@@ -17,7 +17,8 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
   // Form State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [eventName, setEventName] = useState('');
-  const [eventDateTime, setEventDateTime] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,8 +28,8 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
 
   useEffect(() => {
     const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    setEventDateTime(now.toISOString().slice(0, 16));
+    setEventDate(now.toISOString().slice(0, 10));
+    setEventTime(now.toTimeString().slice(0, 5));
 
     fetchEvents();
   }, [schoolId]);
@@ -59,16 +60,17 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventName || !eventDateTime) {
-      alert('Preencha o nome do evento e a data/horário.');
+    if (!eventName || !eventDate || !eventTime) {
+      alert('Preencha o nome do evento, a data e o horário.');
       return;
     }
 
     setLoading(true);
     try {
+      const combinedDateTime = `${eventDate}T${eventTime}`;
       const payload = {
         name: eventName,
-        date: new Date(eventDateTime).toISOString(),
+        date: new Date(combinedDateTime).toISOString(),
         locationAddress: locationAddress || undefined,
         schoolId,
         photoUrls: [],
@@ -82,7 +84,7 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
         const id = await db.pendingEvents.add({
           schoolId,
           name: eventName,
-          date: eventDateTime,
+          date: combinedDateTime,
           photoUrls: [],
           synced: false,
           timestamp: Date.now(),
@@ -90,7 +92,7 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
         const created: EventItem = {
           id: String(id),
           name: eventName,
-          date: eventDateTime,
+          date: combinedDateTime,
           locationAddress,
           photos: [],
           photoUrls: [],
@@ -334,15 +336,27 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Data e Horário *</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={eventDateTime}
-                  onChange={(e) => setEventDateTime(e.target.value)}
-                  className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Data do Evento *</label>
+                  <input
+                    type="date"
+                    required
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Horário *</label>
+                  <input
+                    type="time"
+                    required
+                    value={eventTime}
+                    onChange={(e) => setEventTime(e.target.value)}
+                    className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div>

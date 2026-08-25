@@ -26,10 +26,10 @@ interface FolderMonthlyReportProps {
 }
 
 const STANDARD_NO_DIFFICULTIES_TEXT =
-  'Durante as atividades desenvolvidas no mês de referência, não foram observadas ocorrências ou empecilhos de ordem pedagógica ou estrutural.';
+  'Não foram observadas dificuldades ou empecilhos de ordem técnica, pedagógica ou operacional no decorrer das atividades do mês.';
 
-const STANDARD_ACHIEVED_RESULTS_TEXT =
-  'Constância de participação dos alunos, evolução técnica individual e cumprimento integral do cronograma pedagógico.';
+const STANDARD_SOLUTIONS_NO_NEED_TEXT =
+  'Tendo em vista que não foram observadas dificuldades ou empecilhos no período, não houve necessidade de aplicação de medidas corretivas.';
 
 export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   schoolId,
@@ -55,7 +55,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   const [monitoringEvaluation, setMonitoringEvaluation] = useState('');
   const [hasDifficulties, setHasDifficulties] = useState(false);
   const [difficultiesDetails, setDifficultiesDetails] = useState(STANDARD_NO_DIFFICULTIES_TEXT);
-  const [achievedResults, setAchievedResults] = useState(STANDARD_ACHIEVED_RESULTS_TEXT);
+  const [achievedResults, setAchievedResults] = useState(STANDARD_SOLUTIONS_NO_NEED_TEXT);
 
   // Status & Feedback
   const [reportStatus, setReportStatus] = useState('DRAFT');
@@ -103,12 +103,14 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
         setRehearsalPhotos(rehearsals);
         setEventSessions(events);
 
-        // Pre-select all available photos by default
+        // Pre-select 1 photo per rehearsal by default
         setSelectedRehearsalIds(rehearsals.map((r: any) => r.id));
+
+        // Pre-select max 2 photos per event by default
         const allEventPhotoIds: string[] = [];
         events.forEach((ev: any) => {
           if (Array.isArray(ev.photos)) {
-            ev.photos.forEach((p: any) => allEventPhotoIds.push(p.id));
+            ev.photos.slice(0, 2).forEach((p: any) => allEventPhotoIds.push(p.id));
           }
         });
         setSelectedEventPhotoIds(allEventPhotoIds);
@@ -173,10 +175,10 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
     setHasDifficulties(yes);
     if (!yes) {
       setDifficultiesDetails(STANDARD_NO_DIFFICULTIES_TEXT);
-      setAchievedResults(STANDARD_ACHIEVED_RESULTS_TEXT);
+      setAchievedResults(STANDARD_SOLUTIONS_NO_NEED_TEXT);
     } else {
       if (difficultiesDetails === STANDARD_NO_DIFFICULTIES_TEXT) setDifficultiesDetails('');
-      if (achievedResults === STANDARD_ACHIEVED_RESULTS_TEXT) setAchievedResults('');
+      if (achievedResults === STANDARD_SOLUTIONS_NO_NEED_TEXT) setAchievedResults('');
     }
   };
 
@@ -193,13 +195,88 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
     );
   };
 
-  const toggleSelectEventPhoto = (photoId: string) => {
-    setSelectedEventPhotoIds((prev) =>
-      prev.includes(photoId) ? prev.filter((id) => id !== photoId) : [...prev, photoId]
-    );
+  const toggleSelectEventPhoto = (photoId: string, eventId?: string) => {
+    setSelectedEventPhotoIds((prev) => {
+      if (prev.includes(photoId)) {
+        return prev.filter((id) => id !== photoId);
+      } else {
+        if (eventId) {
+          const ev = eventSessions.find((e) => e.id === eventId);
+          if (ev && Array.isArray(ev.photos)) {
+            const currentSelectedForEv = ev.photos.filter((p: any) => prev.includes(p.id)).length;
+            if (currentSelectedForEv >= 2) {
+              alert('Curadoria de Evento: É permitido selecionar no máximo 2 fotos por evento.');
+              return prev;
+            }
+          }
+        }
+        return [...prev, photoId];
+      }
+    });
+  };
+
+  const validateReport = () => {
+    if (!activitiesFocus.trim()) {
+      alert('Campo Obrigatório: Responda qual foi o foco dos ensaios na Seção 1.');
+      return false;
+    }
+    if (!impactIndicators.trim()) {
+      alert('Campo Obrigatório: Responda os indicadores de resultado na Seção 3.');
+      return false;
+    }
+    if (!monitoringEvaluation.trim()) {
+      alert('Campo Obrigatório: Responda como foi realizado o monitoramento e avaliação na Seção 4.');
+      return false;
+    }
+    if (hasDifficulties) {
+      if (!difficultiesDetails.trim()) {
+        alert('Campo Obrigatório: Descreva as dificuldades encontradas na Seção 5.');
+        return false;
+      }
+      if (!achievedResults.trim()) {
+        alert('Campo Obrigatório: Descreva as soluções adotadas na Seção 6.');
+        return false;
+      }
+    }
+    if (attendanceSessions.length > 0 && selectedRehearsalIds.length < attendanceSessions.length) {
+      alert(`Trava de Validação Fotográfica: É obrigatório selecionar exatamente 1 foto para cada um dos ${attendanceSessions.length} atendimentos executados no mês.`);
+      return false;
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!activitiesFocus.trim()) {
+        alert('Atenção: Por favor, preencha qual foi o foco dos ensaios deste mês para continuar.');
+        return;
+      }
+    } else if (currentStep === 3) {
+      if (!impactIndicators.trim()) {
+        alert('Atenção: Por favor, descreva os indicadores de resultado e impacto para continuar.');
+        return;
+      }
+    } else if (currentStep === 4) {
+      if (!monitoringEvaluation.trim()) {
+        alert('Atenção: Por favor, descreva como foi realizado o monitoramento e avaliação.');
+        return;
+      }
+    } else if (currentStep === 5) {
+      if (hasDifficulties && !difficultiesDetails.trim()) {
+        alert('Atenção: Por favor, descreva as dificuldades encontradas no período.');
+        return;
+      }
+    } else if (currentStep === 6) {
+      if (hasDifficulties && !achievedResults.trim()) {
+        alert('Atenção: Por favor, descreva as soluções adotadas para sanar as dificuldades.');
+        return;
+      }
+    }
+    setCurrentStep((prev) => Math.min(7, prev + 1));
   };
 
   const handleSaveReport = async () => {
+    if (!validateReport()) return;
     setLoading(true);
     try {
       if (isOnline()) {
@@ -234,6 +311,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
   };
 
   const handleExportPDF = async () => {
+    if (!validateReport()) return;
     setPdfGenerating(true);
     try {
       if (typeof window !== 'undefined') {
@@ -452,14 +530,12 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
             </div>
           </div>
 
-          {/* STEP CONTENT SWITCHER */}
-          <div className="min-h-[300px] space-y-6">
-            {/* SEÇÃO 1: DESCRIÇÃO DAS ATIVIDADES PLANEJADAS / EXECUTADAS */}
+          {/* STEP            {/* SEÇÃO 1: DESCRIÇÃO DAS ATIVIDADES PLANEJADAS / EXECUTADAS */}
             {currentStep === 1 && (
               <div className="space-y-4 animate-fadeIn">
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
                   <h4 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
-                    <Calendar size={18} className="text-amber-600" /> Seção 1: Descrição das Atividades Planejadas e Executadas
+                    <Calendar size={18} className="text-amber-600" /> Seção 1: Descrição das Atividades Executadas
                   </h4>
                   <p className="text-xs text-amber-800 font-medium">
                     Resumo automático computado pelas visitas do mês e foco pedagógico informado pelo instrutor.
@@ -482,14 +558,14 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                 {/* Question */}
                 <div className="space-y-2">
                   <label className="block text-xs font-extrabold text-gray-800 uppercase tracking-wider">
-                    Pergunta ao Usuário: Os ensaios deste mês tiveram foco em melhorar qual área/aspecto?
+                    Os ensaios deste mês tiveram foco em melhorar qual área ou aspecto? *
                   </label>
                   <textarea
                     rows={3}
                     value={activitiesFocus}
                     onChange={(e) => setActivitiesFocus(e.target.value)}
                     placeholder="Exemplo: Foco no aprimoramento da afinação, marcha rítmica, postura de apresentação e sincronia da percussão..."
-                    className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-gray-400/60"
                   />
                 </div>
 
@@ -606,14 +682,14 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
 
                 <div className="space-y-2">
                   <label className="block text-xs font-extrabold text-gray-800 uppercase tracking-wider">
-                    Pergunta ao Usuário: Quais foram os principais indicadores de resultado e impacto observados no período?
+                    Quais foram os principais indicadores de resultado e impacto observados no período? *
                   </label>
                   <textarea
                     rows={4}
                     value={impactIndicators}
                     onChange={(e) => setImpactIndicators(e.target.value)}
                     placeholder="Exemplo: Em ambas as escolas, estamos nos preparativos para as futuras apresentações, trabalhando a marcha e sequência de toques com grande adesão da comunidade..."
-                    className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-gray-400/60"
                   />
                 </div>
               </div>
@@ -633,14 +709,14 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
 
                 <div className="space-y-2">
                   <label className="block text-xs font-extrabold text-gray-800 uppercase tracking-wider">
-                    Pergunta ao Usuário: Como foi realizado o monitoramento e a avaliação dos alunos durante as atividades?
+                    Como foi realizado o monitoramento e a avaliação dos alunos durante as atividades? *
                   </label>
                   <textarea
                     rows={4}
                     value={monitoringEvaluation}
                     onChange={(e) => setMonitoringEvaluation(e.target.value)}
                     placeholder="Exemplo: Acompanhamento de frequência e assiduidade através de chamadas diárias. Alunos com faltas consecutivas foram advertidos/remanejados e contatados junto à coordenação escolar..."
-                    className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-gray-400/60"
                   />
                 </div>
               </div>
@@ -654,7 +730,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                     <AlertTriangle size={18} className="text-amber-600" /> Seção 5: Dificuldades Encontradas
                   </h4>
                   <p className="text-xs text-amber-800 font-medium">
-                    Selecione se houve intercorrências estruturais ou pedagógicas durante o mês de referência.
+                    Informe se houve intercorrências estruturais, técnicas ou pedagógicas durante o mês.
                   </p>
                 </div>
 
@@ -691,20 +767,20 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                   {hasDifficulties ? (
                     <div className="space-y-2 pt-2">
                       <label className="block text-xs font-bold text-gray-700">
-                        Relate os empecilhos estruturais ou pedagógicos e as soluções adotadas:
+                        Quais foram as dificuldades enfrentadas no período? *
                       </label>
                       <textarea
                         rows={4}
                         value={difficultiesDetails}
                         onChange={(e) => setDifficultiesDetails(e.target.value)}
-                        placeholder="Descreva detalhadamente as dificuldades enfrentadas e as providências tomadas..."
-                        className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                        placeholder="Descreva detalhadamente as dificuldades estruturais, pedagógicas ou operacionais..."
+                        className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-gray-400/60"
                       />
                     </div>
                   ) : (
                     <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-medium space-y-1">
                       <span className="font-extrabold flex items-center gap-1.5 text-emerald-950">
-                        <CheckCircle2 size={16} className="text-emerald-600" /> Texto Padrão Automático Ativado:
+                        <CheckCircle2 size={16} className="text-emerald-600" /> Resposta Padrão Automática (Sem Dificuldades):
                       </span>
                       <p className="italic">"{STANDARD_NO_DIFFICULTIES_TEXT}"</p>
                     </div>
@@ -713,38 +789,38 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
               </div>
             )}
 
-            {/* SEÇÃO 6: RESULTADOS ALCANÇADOS (CONDICIONAL À PERGUNTA 5) */}
+            {/* SEÇÃO 6: SOLUÇÕES ADOTADAS */}
             {currentStep === 6 && (
               <div className="space-y-4 animate-fadeIn">
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
                   <h4 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
-                    <CheckCircle2 size={18} className="text-amber-600" /> Seção 6: Resultados Alcançados
+                    <CheckCircle2 size={18} className="text-amber-600" /> Seção 6: Soluções Adotadas
                   </h4>
                   <p className="text-xs text-amber-800 font-medium">
-                    Resultado dependente da Seção 5 (Dificuldades Encontradas).
+                    Descreva as providências e soluções aplicadas (dependente da resposta da Seção 5).
                   </p>
                 </div>
 
                 {!hasDifficulties ? (
                   <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 font-medium space-y-2">
                     <span className="font-extrabold flex items-center gap-1.5 text-emerald-950 text-sm">
-                      <CheckCircle2 size={18} className="text-emerald-600" /> Gerado Texto Padrão Automático (Pergunta 5 = NÃO):
+                      <CheckCircle2 size={18} className="text-emerald-600" /> Preenchimento Automático (Pergunta 5 = NÃO):
                     </span>
                     <p className="italic bg-white p-3 rounded-xl border border-emerald-200 font-semibold">
-                      "{STANDARD_ACHIEVED_RESULTS_TEXT}"
+                      "{STANDARD_SOLUTIONS_NO_NEED_TEXT}"
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <label className="block text-xs font-extrabold text-gray-800 uppercase tracking-wider">
-                      Relate os resultados obtidos mesmo diante das dificuldades apontadas na Seção 5:
+                      Quais soluções foram adotadas para sanar as dificuldades relatadas? *
                     </label>
                     <textarea
                       rows={4}
                       value={achievedResults}
                       onChange={(e) => setAchievedResults(e.target.value)}
-                      placeholder="Descreva os resultados e superaçoes atingidas apesar dos empecilhos relatas..."
-                      className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                      placeholder="Descreva as soluções e medidas corretivas aplicadas..."
+                      className="w-full p-3.5 rounded-xl border text-xs font-medium bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-gray-400/60"
                     />
                   </div>
                 )}
@@ -759,16 +835,16 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                     <ImageIcon size={18} className="text-amber-600" /> Seção 7: Curadoria Fotográfica & Gerador de PDF
                   </h4>
                   <p className="text-xs text-amber-800 font-medium">
-                    Regras de quantidade: Mínimo 1 foto por ensaio executado e 1 a 2 fotos por evento.
+                    Regras de quantidade: Exatamente 1 foto por atendimento executado e 1 a 2 fotos por evento.
                   </p>
                 </div>
 
                 {/* Rehearsal Photos Curation */}
                 <div className="space-y-3 bg-white p-4 rounded-2xl border">
                   <h5 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center justify-between">
-                    <span>1. Fotos de Ensaios Regulares ({selectedRehearsalIds.length} selecionada(s))</span>
+                    <span>1. Fotos de Atendimentos / Ensaios ({selectedRehearsalIds.length} de {attendanceSessions.length || 1} selecionadas)</span>
                     <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full">
-                      Mín. 1 por ensaio
+                      Exatamente 1 por atendimento (Obrigatório)
                     </span>
                   </h5>
 
@@ -821,9 +897,9 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                 {/* Event Photos Curation */}
                 <div className="space-y-3 bg-white p-4 rounded-2xl border">
                   <h5 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center justify-between">
-                    <span>2. Fotos de Eventos / Ensaios Extras ({selectedEventPhotoIds.length} selecionada(s))</span>
+                    <span>2. Fotos de Eventos / Apresentações ({selectedEventPhotoIds.length} selecionada(s))</span>
                     <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full">
-                      1 a 2 fotos por evento
+                      Máx. 1 a 2 fotos por evento
                     </span>
                   </h5>
 
@@ -849,7 +925,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                               return (
                                 <div
                                   key={photo.id}
-                                  onClick={() => toggleSelectEventPhoto(photo.id)}
+                                  onClick={() => toggleSelectEventPhoto(photo.id, ev.id)}
                                   className={`relative rounded-xl p-2 bg-white border-2 cursor-pointer transition-all ${
                                     isSelected
                                       ? 'border-amber-500 shadow-sm ring-2 ring-amber-200'
@@ -917,7 +993,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                     {/* Section 1 Render */}
                     <div className="space-y-1">
                       <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
-                        1. Descrição das Atividades Planejadas / Executadas
+                        1. Descrição das Atividades Executadas
                       </h3>
                       <p className="text-xs text-gray-800 bg-gray-50 p-3 rounded-xl border font-medium leading-relaxed">
                         Ensaios semanais com foco em {activitiesFocus || 'aprimoramento técnico e pedagógico'}.
@@ -1013,14 +1089,14 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                     {/* Section 5 & 6 Render */}
                     <div className="space-y-2">
                       <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider border-b pb-1">
-                        5 & 6. Dificuldades Encontradas & Resultados Alcançados
+                        5 & 6. Dificuldades Encontradas & Soluções Adotadas
                       </h3>
                       <div className="p-3 bg-gray-50 rounded-xl border text-xs space-y-2">
                         <p className="font-semibold text-gray-800">
                           <strong>Dificuldades:</strong> {hasDifficulties ? difficultiesDetails : STANDARD_NO_DIFFICULTIES_TEXT}
                         </p>
                         <p className="font-semibold text-gray-800 border-t pt-1">
-                          <strong>Resultados Alcançados:</strong> {!hasDifficulties ? STANDARD_ACHIEVED_RESULTS_TEXT : achievedResults}
+                          <strong>Soluções Adotadas:</strong> {!hasDifficulties ? STANDARD_SOLUTIONS_NO_NEED_TEXT : achievedResults}
                         </p>
                       </div>
                     </div>
@@ -1087,7 +1163,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                         </div>
                         <div>
                           <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Diretoria / Gestão</span>
-                          <span className="font-bold text-gray-900">{directorNameFormatted}</span>
+                          <span className="font-bold text-gray-900">{schoolData?.directorName || directorNameFormatted}</span>
                         </div>
                         <div>
                           <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Responsável Técnico</span>
@@ -1095,18 +1171,27 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                         </div>
                       </div>
 
-                      {/* Instructor Signature Box */}
-                      <div className="pt-6 text-center space-y-1">
-                        <div className="w-64 border-b border-gray-900 mx-auto" />
-                        <p className="font-black text-gray-900">{instructorNameFormatted}</p>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase">Assinatura do Instrutor Responsável</p>
+                      {/* Dupla Assinatura no Rodapé (Professor + Direção Escolar) */}
+                      <div className="pt-8 border-t border-gray-300 grid grid-cols-2 gap-8 text-center">
+                        <div className="space-y-1">
+                          <div className="w-full border-b border-gray-900 mb-2 mx-auto" />
+                          <p className="font-black text-xs text-gray-900">{instructorNameFormatted}</p>
+                          <p className="text-[10px] text-gray-600 font-bold">CPF: {teacherData?.cpf || '111.222.333-44'}</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase">Professor / Instrutor do Projeto</p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="w-full border-b border-gray-900 mb-2 mx-auto" />
+                          <p className="font-black text-xs text-gray-900">{schoolData?.directorName || directorNameFormatted || 'Direção Escolar'}</p>
+                          <p className="text-[10px] text-gray-600 font-bold">Diretora / Gestão Escolar</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase">{schoolNameFormatted}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
             )}
-          </div>
 
           {/* WIZARD NAVIGATION FOOTER */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-200">
@@ -1136,7 +1221,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
               {currentStep < 7 ? (
                 <button
                   type="button"
-                  onClick={() => setCurrentStep((prev) => Math.min(7, prev + 1))}
+                  onClick={handleNextStep}
                   className="px-6 py-3 rounded-full text-xs font-black bg-amber-400 text-black hover:bg-amber-500 transition flex items-center gap-1.5 shadow-md"
                 >
                   Próximo <ChevronRight size={16} />

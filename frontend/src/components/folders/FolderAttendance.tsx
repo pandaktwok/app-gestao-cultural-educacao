@@ -536,12 +536,12 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
                       </div>
                     </div>
 
-                    {/* Tactile Presence Buttons */}
-                    <div className="flex items-center gap-2">
+                    {/* Standardized Tactile Presence Buttons */}
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => setStudentPresence(student.id, true)}
-                        className={`px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all active:scale-95 ${
+                        className={`w-28 h-11 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 transition-all active:scale-95 ${
                           isPresent
                             ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-600'
                             : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'
@@ -552,7 +552,7 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
                       <button
                         type="button"
                         onClick={() => setStudentPresence(student.id, false)}
-                        className={`px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all active:scale-95 ${
+                        className={`w-28 h-11 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 transition-all active:scale-95 ${
                           !isPresent
                             ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-600'
                             : 'bg-gray-100 text-gray-500 hover:bg-rose-100 hover:text-rose-700'
