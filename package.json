@@ -1,0 +1,11 @@
+{
+  "name": "app-gestao-cultural-educacao",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "seed:mock": "npm --prefix backend run seed:mock",
+    "seed_test_environment": "npm --prefix backend run seed:mock"
+  }
+}

@@ -4,7 +4,9 @@ import {
   saveMonthlyReport,
   getAnnualConsolidatedReport,
   questionReportField,
+  approveReportStatus,
   resetReportStatus,
+  getReportAuditLogs,
   getPendingFeedbackReports,
   deletePhotoAudit,
 } from '../controllers/reportController.js';
@@ -16,7 +18,9 @@ router.get('/monthly', authenticateToken, getOrCreateMonthlyReport);
 router.post('/monthly', authenticateToken, saveMonthlyReport);
 router.get('/monthly/pending-feedback', authenticateToken, getPendingFeedbackReports);
 router.post('/monthly/:id/question', authenticateToken, requireAdmin, questionReportField);
+router.post('/monthly/:id/approve', authenticateToken, requireAdmin, approveReportStatus);
 router.post('/monthly/:id/reset', authenticateToken, requireAdmin, resetReportStatus);
+router.get('/monthly/:id/audit-logs', authenticateToken, requireAdmin, getReportAuditLogs);
 router.get('/annual', authenticateToken, requireAdmin, getAnnualConsolidatedReport);
 router.delete('/photos/:type/:id', authenticateToken, requireAdmin, deletePhotoAudit);
 

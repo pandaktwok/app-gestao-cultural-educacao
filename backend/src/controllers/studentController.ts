@@ -83,6 +83,7 @@ export const getStudentsBySchool = async (req: AuthRequest, res: Response) => {
         dropoutDate: student.dropoutDate,
         schoolId: student.schoolId,
         consecutiveAbsences,
+        inRisk: consecutiveAbsences >= 3,
         totalPresence,
         totalAbsence,
         totalSessions,

@@ -250,3 +250,87 @@ export const getSchoolDetails = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getAlertsSummary = async (req: AuthRequest, res: Response) => {
+  try {
+    const schools = await prisma.school.findMany({
+      include: {
+        students: {
+          where: { status: 'ACTIVE' },
+          include: {
+            attendanceRecords: {
+              include: {
+                attendanceSession: { select: { date: true } },
+              },
+              orderBy: {
+                attendanceSession: { date: 'desc' },
+              },
+            },
+          },
+        },
+        monthlyReports: {
+          orderBy: { createdAt: 'desc' },
+        },
+        teacherSchools: {
+          include: {
+            teacher: {
+              select: { id: true, name: true, phone: true },
+            },
+          },
+        },
+      },
+    });
+
+    let totalRiskStudents = 0;
+    const schoolsSummary = schools.map((school) => {
+      const riskStudents: any[] = [];
+
+      school.students.forEach((student) => {
+        const records = student.attendanceRecords || [];
+        let consecutiveAbsences = 0;
+
+        for (let i = 0; i < records.length; i++) {
+          if (!records[i].isPresent) {
+            consecutiveAbsences++;
+          } else {
+            break;
+          }
+        }
+
+        if (consecutiveAbsences >= 3) {
+          totalRiskStudents++;
+          riskStudents.push({
+            id: student.id,
+            name: student.name,
+            age: student.age,
+            consecutiveAbsences,
+            lastAbsenceDate: records[0]?.attendanceSession?.date || null,
+          });
+        }
+      });
+
+      const pendingReport = school.monthlyReports.find((r) => r.status === 'DRAFT' || r.status === 'REVISION_REQUESTED');
+
+      return {
+        schoolId: school.id,
+        schoolName: school.name,
+        boardName: school.boardName,
+        assignedTeachers: school.teacherSchools.map((ts) => ts.teacher),
+        riskStudentsCount: riskStudents.length,
+        riskStudents,
+        hasPendingReport: !!pendingReport,
+        pendingReportStatus: pendingReport?.status || null,
+      };
+    });
+
+    return res.json({
+      totalRiskStudents,
+      totalSchoolsCount: schools.length,
+      schoolsWithRiskCount: schoolsSummary.filter((s) => s.riskStudentsCount > 0).length,
+      schoolsSummary,
+    });
+  } catch (error) {
+    console.error('Error fetching alerts summary:', error);
+    return res.status(500).json({ error: 'Erro ao buscar resumo de alertas' });
+  }
+};
+

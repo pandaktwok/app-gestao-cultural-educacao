@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:mock": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio"
   },
   "prisma": {

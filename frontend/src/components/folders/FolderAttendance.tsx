@@ -382,8 +382,15 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
                               {student.name}
                             </p>
                             {hasAlert && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-amber-950 shadow-sm animate-pulse">
-                                <AlertTriangle size={11} /> ⚠️ {student.consecutiveAbsences} Faltas Seguidas
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shadow-sm ${
+                                  (student.consecutiveAbsences || 0) >= 3
+                                    ? 'bg-rose-600 text-white animate-pulse'
+                                    : 'bg-amber-400 text-amber-950'
+                                }`}
+                                title={(student.consecutiveAbsences || 0) >= 3 ? 'Risco de Evasão Escolar: 3+ faltas seguidas neste mês' : 'Atenção com assiduidade'}
+                              >
+                                <AlertTriangle size={11} /> {(student.consecutiveAbsences || 0) >= 3 ? '⚠️ Risco de Evasão (3+ Faltas)' : `${student.consecutiveAbsences} Faltas Seguidas`}
                               </span>
                             )}
                           </div>

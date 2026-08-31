@@ -76,6 +76,7 @@ model Student {
 
   school             School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   attendanceRecords  AttendanceRecord[]
+  certificates       CertificateHash[]
 }
 
 model AttendanceSession {
@@ -135,18 +136,32 @@ model EventSession {
   teacherId             String
   createdAt             DateTime @default(now())
 
-  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teacher User         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  photos  EventPhoto[]
+  school       School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher      User              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  photos       EventPhoto[]
+  certificates CertificateHash[]
 }
 
 model EventPhoto {
   id                String   @id @default(uuid())
   eventSessionId    String
   photoUrl          String
+  category          String   @default("PALCO_APRESENTACAO") // 'BASTIDORES_ENSAIO', 'PALCO_APRESENTACAO', 'PLATEIA_AUTORIDADES'
   googleDriveFileId String?
   createdAt         DateTime @default(now())
 
+  eventSession EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
+}
+
+model CertificateHash {
+  id             String   @id @default(uuid())
+  hash           String   @unique
+  studentId      String
+  eventSessionId String
+  issueDate      DateTime @default(now())
+  attendanceRate Float    @default(100.0)
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   eventSession EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
 }
 
@@ -180,6 +195,34 @@ model MonthlyReport {
 
   school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  auditLogs ReportAuditLog[]
 
   @@unique([schoolId, teacherId, monthYear])
+}
+
+model ReportAuditLog {
+  id              String   @id @default(uuid())
+  monthlyReportId String
+  userId          String
+  userRole        String
+  userName        String
+  action          String   // 'CREATED', 'SUBMITTED', 'QUESTIONED', 'REVISED', 'APPROVED'
+  details         String?
+  createdAt       DateTime @default(now())
+
+  monthlyReport MonthlyReport @relation(fields: [monthlyReportId], references: [id], onDelete: Cascade)
+}
+
+model CustomQuestion {
+  id          String   @id @default(uuid())
+  title       String
+  fieldType   String   @default("TEXTAREA") // 'TEXT', 'TEXTAREA', 'RADIO', 'CHECKBOX', 'BOOLEAN'
+  isRequired  Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  options     String?  // JSON array of strings for radio/checkbox options
+  scopeType   String   @default("GLOBAL") // 'GLOBAL', 'TEACHER', 'SCHOOL'
+  scopeId     String?  // teacherId or schoolId if restricted
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

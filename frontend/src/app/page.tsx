@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { School, LogOut, Key, Shield, User, Wifi, WifiOff } from 'lucide-react';
+import { School, LogOut, Key, Shield, User, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { api, isOnline } from '../lib/api';
+import { populateTestEnvironment } from '../lib/seedTestEnvironment';
 import { BentoCard } from '../components/bento/BentoCard';
 import { StackedFolders } from '../components/folders/StackedFolders';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
@@ -43,6 +44,21 @@ export default function HomePage() {
   const [teacherSchools, setTeacherSchools] = useState<SchoolItem[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<SchoolItem | null>(null);
   const [pendingFeedbackReports, setPendingFeedbackReports] = useState<any[]>([]);
+  const [seeding, setSeeding] = useState(false);
+
+  const handleDevReset = async () => {
+    if (confirm('⚡ Resetar e repovoar instantaneamente o ambiente com os dados de teste? Todos os dados atuais serão substituídos.')) {
+      setSeeding(true);
+      const res = await populateTestEnvironment();
+      setSeeding(false);
+      if (res.success) {
+        alert('✅ Ambiente de testes reseedado com sucesso!');
+        window.location.reload();
+      } else {
+        alert(`❌ ${res.message}`);
+      }
+    }
+  };
 
   useEffect(() => {
     // Online/Offline detection
@@ -171,12 +187,19 @@ export default function HomePage() {
     return (
       <main className="min-h-screen bg-bgLight flex items-center justify-center p-4">
         <div className="max-w-md w-full bento-card p-8 space-y-6 shadow-2xl">
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 rounded-3xl bg-charcoal text-white flex items-center justify-center mx-auto shadow-xl font-extrabold text-2xl">
-              GC
+          <div className="text-center space-y-3">
+            <div className="w-24 h-24 mx-auto rounded-3xl bg-white p-2.5 border border-gray-100 shadow-bento flex items-center justify-center">
+              <img src="/logo.png" alt="Sociedade Cultural Cruzeiro do Sul" className="w-full h-full object-contain drop-shadow-sm" />
             </div>
-            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Gestão Cultural & Prestação de Contas</h1>
-            <p className="text-xs text-gray-500 font-medium">Acesse com seu CPF e senha para registrar presenças e fotos.</p>
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 inline-block mb-1">
+                Sociedade Cultural Cruzeiro do Sul
+              </span>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight leading-tight">
+                Gestão Cultural & Prestação de Contas
+              </h1>
+            </div>
+            <p className="text-xs text-gray-500 font-medium">Acesse com seu CPF e senha para registrar presenças e fotos de relatórios.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -213,12 +236,23 @@ export default function HomePage() {
             </button>
           </form>
 
-          <div className="text-center border-t pt-4">
+          <div className="text-center border-t pt-4 space-y-3">
             <p className="text-[11px] text-gray-400 font-bold">
               Credenciais de Teste: <br />
               <span className="text-gray-700">Admin:</span> CPF <code className="text-gray-800">000.000.000-00</code> / <code className="text-gray-800">admin123</code> <br />
-              <span className="text-gray-700">Professor:</span> CPF <code className="text-gray-800">111.222.333-44</code> / <code className="text-gray-800">prof123</code>
+              <span className="text-gray-700">Professor 1:</span> CPF <code className="text-gray-800">111.222.333-44</code> / <code className="text-gray-800">prof123</code> <br />
+              <span className="text-gray-700">Professor 2:</span> CPF <code className="text-gray-800">555.666.777-88</code> / <code className="text-gray-800">prof123</code>
             </p>
+
+            <button
+              type="button"
+              onClick={handleDevReset}
+              disabled={seeding}
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition flex items-center justify-center gap-2 shadow-sm"
+            >
+              <RefreshCw size={14} className={seeding ? 'animate-spin' : ''} />
+              {seeding ? 'Resetando Ambiente...' : '[DEV: Resetar Dados de Teste]'}
+            </button>
           </div>
         </div>
       </main>
@@ -231,21 +265,35 @@ export default function HomePage() {
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white p-1 border border-gray-200 shadow-sm flex items-center justify-center shrink-0">
+              <img src="/logo.png" alt="Sociedade Cultural Cruzeiro do Sul" className="w-full h-full object-contain" />
+            </div>
             <div
               style={{ backgroundColor: user.avatarColor }}
-              className="w-10 h-10 rounded-full text-white font-extrabold flex items-center justify-center text-sm shadow-md"
+              className="w-9 h-9 rounded-full text-white font-extrabold flex items-center justify-center text-sm shadow-md shrink-0"
             >
               {user.initialAvatar}
             </div>
             <div>
               <h2 className="font-extrabold text-sm text-gray-900 leading-tight">{user.name}</h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                 {user.role === 'ADMIN' ? 'Diretoria / Admin' : 'Professor de Campo'}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDevReset}
+              disabled={seeding}
+              className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition flex items-center gap-1.5"
+              title="Limpar e repovoar o banco e IndexedDB com dados simulados"
+            >
+              <RefreshCw size={12} className={seeding ? 'animate-spin' : ''} />
+              {seeding ? 'Resetando...' : 'DEV: Reset Testes'}
+            </button>
+
             <span
               className={`flex items-center gap-1 text-[11px] font-extrabold px-3 py-1 rounded-full ${
                 onlineStatus ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'

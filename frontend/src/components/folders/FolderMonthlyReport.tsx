@@ -446,6 +446,75 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
 
   return (
     <div className="p-6 bg-white rounded-b-bento-lg space-y-6 font-sans">
+      {/* BANNER AMARELO FIXO DE REVISÃO DA DIRETORIA */}
+      {reportStatus === 'REVISION_REQUESTED' && (
+        <div className="p-5 bg-amber-50 border-2 border-amber-400 rounded-3xl space-y-3 shadow-lg animate-fadeIn">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2 bg-amber-400 text-amber-950 rounded-2xl shrink-0 mt-0.5">
+              <AlertTriangle size={24} />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                Aviso da Coordenação Geral
+              </span>
+              <h4 className="text-base font-extrabold text-amber-950">
+                ⚠️ Revisão Necessária: O relatório possui observações da diretoria
+              </h4>
+              <p className="text-xs text-amber-900 font-medium">
+                A coordenação solicitou justificativas ou ajustes em um ou mais campos abaixo. Corrija os pontos destacados em amarelo e clique em <strong>"Reenviar Relatório para Auditoria"</strong>.
+              </p>
+            </div>
+          </div>
+
+          {adminFeedback && adminFeedback.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-amber-200/80">
+              {adminFeedback.map((fb: any, idx: number) => (
+                <div key={idx} className="text-xs bg-white/90 p-3 rounded-2xl border border-amber-300 text-amber-950 font-medium flex items-start gap-2 shadow-xs">
+                  <span className="text-amber-600 font-bold shrink-0">📌 Campo ({fb.fieldKey}):</span>
+                  <span>"{fb.comment}"</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* BANNER INTELEGENE 5 DIAS RESTANTES - ENVIO 1-CLIQUE */}
+      {reportStatus === 'DRAFT' && (
+        <div className="p-5 bg-gradient-to-r from-indigo-900 to-purple-900 text-white rounded-3xl space-y-4 shadow-xl border border-indigo-700/80 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 bg-amber-400 text-amber-950 rounded-2xl shrink-0 mt-0.5 shadow-md">
+                <Calendar size={24} />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-300 bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-500/40">
+                  Lembrete Automático de Prazo
+                </span>
+                <h4 className="text-base font-extrabold text-white">
+                  📅 Faltam 5 dias para o fechamento do Relatório Mensal!
+                </h4>
+                <p className="text-xs text-indigo-200 font-medium">
+                  Suas chamadas presenciais estão atualizadas. Utilize o assistente guiado ou execute o preenchimento automático em 1-clique.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (validateReport(true)) {
+                  handleSaveReport();
+                }
+              }}
+              className="px-6 py-3 rounded-full font-black text-xs bg-amber-400 text-amber-950 hover:bg-amber-300 transition shadow-lg shrink-0 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+            >
+              <Sparkles size={16} /> ⚡ Envio 1-Clique Direto
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* INITIAL BANNER & ACTION TO OPEN WIZARD */}
       {!isWizardOpen ? (
         <div className="bento-card p-6 bg-gradient-to-br from-amber-50/90 to-amber-100/50 border border-amber-200/80 space-y-6 shadow-xl">
@@ -510,14 +579,24 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
 
           {/* Primary Action Buttons */}
           <div className="pt-2 flex flex-col sm:flex-row items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setIsWizardOpen(true)}
-              className="w-full sm:w-auto px-8 py-4 rounded-full font-black text-sm bg-charcoal text-white hover:bg-black transition shadow-xl flex items-center justify-center gap-3 group active:scale-95 cursor-pointer"
-            >
-              <Play size={18} fill="white" className="group-hover:scale-110 transition" />
-              Iniciar Relatório (Assistente)
-            </button>
+            {rehearsalPhotos.length < 4 ? (
+              <div className="w-full p-4 bg-amber-100/90 border border-amber-300 rounded-2xl flex items-center gap-3 text-amber-950">
+                <AlertTriangle className="text-amber-700 shrink-0" size={20} />
+                <div className="text-xs font-medium">
+                  <span className="font-extrabold block">🔒 Emissão Bloqueada:</span>
+                  É necessário registrar no mínimo <strong>4 atendimentos/ensaios</strong> na unidade para liberar o relatório. (Atuais: <strong>{rehearsalPhotos.length}/4</strong>)
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsWizardOpen(true)}
+                className="w-full sm:w-auto px-8 py-4 rounded-full font-black text-sm bg-charcoal text-white hover:bg-black transition shadow-xl flex items-center justify-center gap-3 group active:scale-95 cursor-pointer"
+              >
+                <Play size={18} fill="white" className="group-hover:scale-110 transition" />
+                Iniciar Relatório (Assistente)
+              </button>
+            )}
 
             <button
               type="button"
@@ -1206,12 +1285,8 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                           <span className="font-black text-gray-900">{instructorNameFormatted}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Escolas Atendidas</span>
-                          <span className="font-bold text-gray-900">
-                            {teacherSchools.length > 0
-                              ? teacherSchools.map((s) => s.name).join(', ')
-                              : schoolNameFormatted}
-                          </span>
+                          <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Escola Atendida</span>
+                          <span className="font-bold text-gray-900">{schoolNameFormatted}</span>
                         </div>
                         <div>
                           <span className="text-[10px] font-extrabold text-gray-500 block uppercase">Diretoria / Gestão</span>
@@ -1244,6 +1319,45 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
                 </div>
               </div>
             )}
+
+          {/* WIZARD NAVIGATION FOOTER */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              disabled={currentStep === 1}
+              onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
+              className={`px-5 py-3 rounded-full text-xs font-black flex items-center gap-1.5 transition ${
+                currentStep === 1
+                  ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+              }`}
+            >
+              <ChevronLeft size={16} /> Anterior
+            </button>
+
+            {currentStep < 7 ? (
+              <button
+                type="button"
+                onClick={handleNextStep}
+                className="px-6 py-3 rounded-full text-xs font-black bg-amber-400 text-black hover:bg-amber-500 shadow-md flex items-center gap-1.5 transition active:scale-95"
+              >
+                Próximo Passo <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleSaveReport();
+                  setIsWizardOpen(false);
+                  handleExportPDF();
+                }}
+                disabled={loading || pdfGenerating}
+                className="px-8 py-3.5 rounded-full text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg flex items-center gap-2 transition active:scale-95"
+              >
+                <CheckCircle2 size={18} /> Finalizar Relatório
+              </button>
+            )}
+          </div>
 
           {/* WIZARD NAVIGATION FOOTER */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-200">

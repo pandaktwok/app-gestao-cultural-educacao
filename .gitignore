@@ -34,3 +34,4 @@ scratch/
 # Operating System
 .DS_Store
 Thumbs.db
+.gemini/

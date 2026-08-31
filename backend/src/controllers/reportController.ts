@@ -253,6 +253,7 @@ export const getAnnualConsolidatedReport = async (req: AuthRequest, res: Respons
 export const questionReportField = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { fieldKey, comment } = req.body;
+  const adminUser = req.user;
 
   if (!fieldKey || !comment) {
     return res.status(400).json({ error: 'fieldKey e comment são obrigatórios' });
@@ -290,10 +291,57 @@ export const questionReportField = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    const dbAdminUser = adminUser?.id ? await prisma.user.findUnique({ where: { id: adminUser.id } }) : null;
+
+    // Create Audit Log
+    await prisma.reportAuditLog.create({
+      data: {
+        monthlyReportId: id,
+        userId: adminUser?.id || 'admin-id',
+        userRole: adminUser?.role || 'ADMIN',
+        userName: dbAdminUser?.name || 'Coordenação Geral',
+        action: 'QUESTIONED',
+        details: `Campo (${fieldKey}) questionado: "${comment}"`,
+      },
+    });
+
     return res.json(updated);
   } catch (error) {
     console.error('Error questioning report field:', error);
     return res.status(500).json({ error: 'Erro ao questionar campo do relatório' });
+  }
+};
+
+export const approveReportStatus = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const adminUser = req.user;
+
+  try {
+    const updated = await prisma.monthlyReport.update({
+      where: { id },
+      data: {
+        status: 'APPROVED',
+      },
+    });
+
+    const dbAdminUser = adminUser?.id ? await prisma.user.findUnique({ where: { id: adminUser.id } }) : null;
+
+    // Create Audit Log
+    await prisma.reportAuditLog.create({
+      data: {
+        monthlyReportId: id,
+        userId: adminUser?.id || 'admin-id',
+        userRole: adminUser?.role || 'ADMIN',
+        userName: dbAdminUser?.name || 'Coordenação Geral',
+        action: 'APPROVED',
+        details: 'Relatório aprovado pela Diretoria Executiva.',
+      },
+    });
+
+    return res.json({ message: 'Relatório aprovado com sucesso', report: updated });
+  } catch (error) {
+    console.error('Error approving report:', error);
+    return res.status(500).json({ error: 'Erro ao aprovar relatório' });
   }
 };
 
@@ -313,6 +361,21 @@ export const resetReportStatus = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error resetting report:', error);
     return res.status(500).json({ error: 'Erro ao resetar relatório' });
+  }
+};
+
+export const getReportAuditLogs = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const logs = await prisma.reportAuditLog.findMany({
+      where: { monthlyReportId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+    return res.json(logs);
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
+    return res.status(500).json({ error: 'Erro ao buscar histórico de auditoria' });
   }
 };
 
@@ -357,4 +420,3 @@ export const deletePhotoAudit = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Erro ao excluir foto' });
   }
 };
-

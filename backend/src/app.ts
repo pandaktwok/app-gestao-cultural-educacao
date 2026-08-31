@@ -6,6 +6,9 @@ import schoolRoutes from './routes/schoolRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import devRoutes from './routes/devRoutes.js';
+import questionnaireRoutes from './routes/questionnaireRoutes.js';
+import certificateRoutes from './routes/certificateRoutes.js';
 
 const app = express();
 
@@ -22,6 +25,9 @@ app.use('/api/schools', schoolRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/dev', devRoutes);
+app.use('/api/questionnaire', questionnaireRoutes);
+app.use('/api/certificates', certificateRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

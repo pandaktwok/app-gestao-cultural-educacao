@@ -44,25 +44,41 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
     }
   }, [schoolId]);
 
-  const isCoolDown = lastVisitEndTime ? Date.now() - lastVisitEndTime < 24 * 60 * 60 * 1000 : false;
+  const disable24hLock =
+    process.env.NEXT_PUBLIC_DISABLE_24H_LOCK === 'true' ||
+    (typeof window !== 'undefined' && localStorage.getItem('dev_disable_24h_lock') === 'true');
+
+  const COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 Horas Cooldown
+  const isCoolDown = !disable24hLock && (lastVisitEndTime ? Date.now() - lastVisitEndTime < COOLDOWN_MS : false);
   const hoursRemaining = lastVisitEndTime
-    ? Math.max(1, Math.ceil((24 * 60 * 60 * 1000 - (Date.now() - lastVisitEndTime)) / (1000 * 60 * 60)))
+    ? Math.max(1, Math.ceil((COOLDOWN_MS - (Date.now() - lastVisitEndTime)) / (1000 * 60 * 60)))
     : 0;
 
-  const handleStartVisit = () => {
+  // Category Selector Modal State
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [visitCategory, setVisitCategory] = useState<'Ensaio' | 'Reposição' | 'Reforço'>('Ensaio');
+
+  const handleStartVisitClick = () => {
     if (isCoolDown) {
-      alert(`Visita bloqueada por 24h. Disponível novamente em ~${hoursRemaining} horas.`);
+      alert(`Visita bloqueada por 4h. Disponível novamente em ~${hoursRemaining} horas.`);
       return;
     }
+    setShowCategoryModal(true);
+  };
+
+  const handleConfirmCategory = (cat: 'Ensaio' | 'Reposição' | 'Reforço') => {
+    setVisitCategory(cat);
     setIsVisitStarted(true);
     localStorage.setItem(`visit_started_${schoolId}`, new Date().toISOString());
+    localStorage.setItem(`visit_category_${schoolId}`, cat);
+    setShowCategoryModal(false);
     setActiveFolder(1); // Open Chamada e Frequência
   };
 
   const handleEndVisit = async () => {
     if (progressPercent < 100) return;
 
-    if (confirm('Deseja encerrar a visita para esta escola? Os dados serão consolidados e o bloqueio de 24h será ativado.')) {
+    if (confirm('Deseja encerrar a visita para esta escola? Os dados serão consolidados e o bloqueio de 4h será ativado.')) {
       const nowIso = new Date().toISOString();
       setIsVisitCompleted(true);
       setLastVisitEndTime(Date.now());
@@ -235,7 +251,7 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
             </div>
             <button
               type="button"
-              onClick={handleStartVisit}
+              onClick={handleStartVisitClick}
               className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95 shrink-0"
             >
               <Play size={16} fill="white" /> Iniciar Visita
@@ -373,6 +389,56 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
           );
         })}
       </div>
+
+      {/* CATEGORY SELECTOR MODAL */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-bento-lg p-6 max-w-md w-full space-y-6 shadow-2xl">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto font-extrabold text-xl">
+                📋
+              </div>
+              <h3 className="text-lg font-extrabold text-gray-900">Iniciar Atendimento</h3>
+              <p className="text-xs text-gray-600 font-medium">
+                Selecione a **Categoria de Atendimento** para esta sessão. Este valor carimbará os registros no sistema.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                { key: 'Ensaio', title: '🎵 Ensaio (Padrão)', desc: 'Ensaio regular de rotina do projeto' },
+                { key: 'Reposição', title: '🔄 Reposição', desc: 'Reposição de aula/ensaio acumulado' },
+                { key: 'Reforço', title: '💪 Reforço', desc: 'Sessão de reforço ou acompanhamento focalizado' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleConfirmCategory(item.key as any)}
+                  className="w-full p-4 rounded-2xl border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50/50 text-left transition flex items-center justify-between group active:scale-[0.98]"
+                >
+                  <div>
+                    <span className="font-extrabold text-sm text-gray-900 block group-hover:text-emerald-800">
+                      {item.title}
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium">{item.desc}</span>
+                  </div>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-100 group-hover:bg-emerald-600 group-hover:text-white transition">
+                    Selecionar
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCategoryModal(false)}
+              className="w-full py-3 rounded-full text-xs font-bold text-gray-500 hover:bg-gray-100 transition"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
