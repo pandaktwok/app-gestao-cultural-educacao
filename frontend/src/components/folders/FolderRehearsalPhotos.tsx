@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, CheckCircle2, Clock, Trash2 } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Trash2, Loader2 } from 'lucide-react';
 import { compressPhoto, extractExifTimestamp } from '../../lib/imageUtils';
 import { api, isOnline } from '../../lib/api';
 import { db } from '../../lib/db';
@@ -21,33 +21,27 @@ export const FolderRehearsalPhotos: React.FC<FolderRehearsalPhotosProps> = ({ sc
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [showImageModal, setShowImageModal] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [error, setError] = useState('');
 
   const handlePhotoCaptured = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
-
     setLoading(true);
+    setError('');
     try {
       const newItems: PhotoItem[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const compressed = await compressPhoto(file);
         const timestamp = await extractExifTimestamp(file);
-        newItems.push({
-          id: `${Date.now()}_${i}`,
-          url: compressed,
-          timestamp,
-        });
+        newItems.push({ id: `${Date.now()}_${i}`, url: compressed, timestamp });
       }
-
       const updated = [...photos, ...newItems];
       setPhotos(updated);
-
-      if (updated.length >= 1) {
-        onComplete(true);
-      }
-    } catch (error) {
-      console.error('Error processing photos:', error);
+      setSubmitted(false); // novas fotos precisam ser enviadas
+    } catch (err) {
+      console.error('Error processing photos:', err);
+      setError('Não foi possível processar a foto. Tente tirar novamente.');
     } finally {
       setLoading(false);
     }
@@ -56,15 +50,14 @@ export const FolderRehearsalPhotos: React.FC<FolderRehearsalPhotosProps> = ({ sc
   const handleRemovePhoto = (id: string) => {
     const updated = photos.filter((p) => p.id !== id);
     setPhotos(updated);
-    if (updated.length < 1) {
-      onComplete(false);
-    }
+    setSubmitted(false);
+    if (updated.length < 1) onComplete(false);
   };
 
   const handleSubmitPhotos = async () => {
     if (photos.length < 1) return;
-
     setLoading(true);
+    setError('');
     try {
       const payload = {
         date: new Date().toISOString(),
@@ -87,101 +80,115 @@ export const FolderRehearsalPhotos: React.FC<FolderRehearsalPhotosProps> = ({ sc
           });
         }
       }
-
       setSubmitted(true);
       onComplete(true);
-    } catch (error) {
-      console.error('Error uploading rehearsal photos:', error);
+    } catch (err) {
+      console.error('Error uploading rehearsal photos:', err);
+      setError('Não foi possível enviar agora. Confira a internet e toque em enviar de novo.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-6 bg-white rounded-b-bento-lg space-y-6">
+    <div className="p-4 sm:p-6 bg-white rounded-b-bento-lg space-y-5">
       <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex items-start gap-3">
-        <Camera className="text-accentPeach shrink-0 mt-0.5" size={20} />
+        <Camera className="text-accentPeach shrink-0 mt-0.5" size={22} />
         <div>
-          <h4 className="text-sm font-extrabold text-orange-950">Foto do Ensaio Obrigatória</h4>
-          <p className="text-xs text-orange-800 font-medium">
-            Adicione no mínimo 1 foto do ensaio de hoje para validar o atendimento. Metadados de data e hora são extraídos automaticamente.
+          <h4 className="text-sm font-extrabold text-orange-950">Foto do ensaio obrigatória</h4>
+          <p className="text-xs text-orange-800 font-medium mt-0.5">
+            Tire pelo menos 1 foto agora, durante o ensaio. A data e a hora são registradas automaticamente.
           </p>
         </div>
       </div>
 
-      {/* Photo Picker / Camera button */}
-      <div className="border-2 border-dashed border-orange-200 rounded-3xl p-6 text-center hover:border-accentPeach transition bg-orange-50/30">
-        <Camera size={40} className="mx-auto text-accentPeach mb-2" />
-        <p className="text-sm font-bold text-gray-800 mb-1">Fotos do Ensaio</p>
-        <p className="text-xs text-gray-500 mb-4">Captura direta pela câmera ou arquivo local</p>
+      {/* Botão principal da câmera */}
+      <button
+        type="button"
+        onClick={() => setShowCamera(true)}
+        disabled={isReadOnly || loading}
+        className="w-full min-h-[132px] rounded-3xl border-2 border-dashed border-orange-300 bg-orange-50/50 active:bg-orange-100 disabled:opacity-50 flex flex-col items-center justify-center gap-2 transition"
+      >
+        {loading ? (
+          <Loader2 size={38} className="text-accentPeach animate-spin" />
+        ) : (
+          <span className="h-16 w-16 rounded-full bg-charcoal text-white flex items-center justify-center shadow-lg">
+            <Camera size={30} />
+          </span>
+        )}
+        <span className="text-base font-extrabold text-gray-900">
+          {photos.length === 0 ? 'Tirar foto do ensaio' : 'Tirar mais fotos'}
+        </span>
+        <span className="text-xs text-gray-500 font-medium">Abre a câmera do celular</span>
+      </button>
 
-        <button
-          type="button"
-          onClick={() => setShowImageModal(true)}
-          className="inline-flex items-center gap-2 bg-charcoal text-white text-xs font-extrabold px-6 py-3 rounded-full cursor-pointer hover:bg-black shadow-md transition"
-        >
-          <Camera size={16} /> Adicionar Fotos do Ensaio
-        </button>
-      </div>
-
-      {/* Photos Grid */}
+      {/* Grade de fotos */}
       {photos.length > 0 && (
         <div className="space-y-3">
           <h4 className="font-extrabold text-sm text-gray-800">
-            Fotos Selecionadas ({photos.length})
+            {photos.length} {photos.length === 1 ? 'foto tirada' : 'fotos tiradas'}
           </h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {photos.map((photo) => (
-              <div key={photo.id} className="relative group rounded-2xl overflow-hidden border bg-gray-50 shadow-sm">
-                <img src={photo.url} alt="Ensaio" className="w-full h-32 object-cover" />
-                <div className="p-2 bg-white flex items-center justify-between text-[11px] text-gray-600 font-bold">
+              <div key={photo.id} className="relative rounded-2xl overflow-hidden border bg-gray-50 shadow-sm">
+                <img src={photo.url} alt="Foto do ensaio" className="w-full h-36 object-cover" />
+                <div className="px-2.5 py-1.5 bg-white flex items-center justify-between text-xs text-gray-600 font-bold">
                   <span className="flex items-center gap-1">
-                    <Clock size={12} className="text-accentPeach" />
-                    {photo.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <Clock size={13} className="text-accentPeach" />
+                    {photo.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemovePhoto(photo.id)}
-                    className="text-rose-600 hover:bg-rose-50 p-1 rounded-full"
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemovePhoto(photo.id)}
+                  aria-label="Apagar foto"
+                  className="absolute top-2 right-2 h-11 w-11 rounded-full bg-black/60 text-white flex items-center justify-center active:bg-rose-600"
+                >
+                  <Trash2 size={18} />
+                </button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Save Button */}
+      {error && (
+        <p role="alert" className="text-sm font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-2xl p-3">
+          {error}
+        </p>
+      )}
+
       <button
         type="button"
         onClick={handleSubmitPhotos}
         disabled={photos.length < 1 || loading || submitted}
-        className={`w-full py-4 rounded-full font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-2 ${
+        className={`w-full min-h-[56px] rounded-full font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-2 ${
           photos.length < 1
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
             : submitted
             ? 'bg-emerald-600 text-white cursor-default'
-            : 'bg-charcoal text-white hover:bg-black active:scale-[0.99]'
+            : 'bg-charcoal text-white active:scale-[0.98]'
         }`}
       >
         {submitted ? (
           <>
-            <CheckCircle2 size={20} /> Fotos Salvas e Validadas!
+            <CheckCircle2 size={22} /> Fotos enviadas!
+          </>
+        ) : loading ? (
+          <>
+            <Loader2 size={20} className="animate-spin" /> Enviando…
           </>
         ) : (
-          'Enviar Fotos do Ensaio'
+          `Enviar ${photos.length > 0 ? photos.length : ''} ${photos.length === 1 ? 'foto' : 'fotos'}`.replace('  ', ' ')
         )}
       </button>
 
-      {/* Global Image Capture Modal */}
       <ImageCaptureModal
-        isOpen={showImageModal}
-        onClose={() => setShowImageModal(false)}
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
         onCapture={handlePhotoCaptured}
-        title="Fotos do Ensaio"
-        multiple={true}
+        title="Fotos do ensaio"
+        multiple
       />
     </div>
   );

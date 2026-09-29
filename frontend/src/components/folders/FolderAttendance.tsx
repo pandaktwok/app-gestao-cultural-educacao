@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { UserCheck, Upload, UserPlus, CheckCircle2, UserX, Play, X, AlertTriangle, Calendar, Award, Clock } from 'lucide-react';
+import { UserCheck, UserPlus, CheckCircle2, UserX, Play, AlertTriangle, Clock, Camera, Minus, Plus, Check, X, Loader2 } from 'lucide-react';
 import { api, isOnline } from '../../lib/api';
 import { db } from '../../lib/db';
 import { compressPhoto } from '../../lib/imageUtils';
 import { ImageCaptureModal } from '../common/ImageCaptureModal';
+import { BottomSheet } from '../common/BottomSheet';
 
 interface FolderAttendanceProps {
   schoolId: string;
@@ -24,35 +25,76 @@ interface Student {
   totalAbsence?: number;
 }
 
+type Category = 'Ensaio' | 'Reposição' | 'Reforço';
+
+const CATEGORY_LABEL: Record<Category, { icon: string; label: string }> = {
+  Ensaio: { icon: '🎵', label: 'Ensaio' },
+  Reposição: { icon: '🔄', label: 'Reposição' },
+  Reforço: { icon: '💪', label: 'Reforço' },
+};
+
+const initials = (name: string) => name.trim().substring(0, 2).toUpperCase();
+
+const Stepper: React.FC<{ value: number; onChange: (v: number) => void; min?: number; max?: number; label: string; tone: 'green' | 'red' }> = ({
+  value,
+  onChange,
+  min = 0,
+  max = 999,
+  label,
+  tone,
+}) => (
+  <div>
+    <span className="block text-xs font-extrabold text-gray-700 mb-1.5">{label}</span>
+    <div className={`flex items-center rounded-2xl border-2 overflow-hidden ${tone === 'green' ? 'border-emerald-300 bg-emerald-50/50' : 'border-rose-300 bg-rose-50/50'}`}>
+      <button type="button" aria-label={`Diminuir ${label}`} onClick={() => onChange(Math.max(min, value - 1))} className="h-14 w-14 flex items-center justify-center active:bg-black/10 shrink-0">
+        <Minus size={20} />
+      </button>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Math.min(max, Math.max(min, parseInt(e.target.value, 10) || 0)))}
+        className={`w-full min-w-0 h-14 text-center text-2xl font-extrabold bg-transparent focus:outline-none ${tone === 'green' ? 'text-emerald-800' : 'text-rose-800'}`}
+      />
+      <button type="button" aria-label={`Aumentar ${label}`} onClick={() => onChange(Math.min(max, value + 1))} className="h-14 w-14 flex items-center justify-center active:bg-black/10 shrink-0">
+        <Plus size={20} />
+      </button>
+    </div>
+  </div>
+);
+
+
 export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, onComplete, isReadOnly = false }) => {
   const [submodule, setSubmodule] = useState<'MANUAL' | 'EXTERNAL'>('MANUAL');
-  const [category, setCategory] = useState<'Ensaio' | 'Reposição' | 'Reforço'>('Ensaio');
+  const [category, setCategory] = useState<Category>('Ensaio');
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
-  // Dedicated Attendance Modal state
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
 
-  // Student History Performance Modal state
   const [selectedStudentHistory, setSelectedStudentHistory] = useState<any | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Submodule B state
   const [externalPhoto, setExternalPhoto] = useState<string | null>(null);
   const [externalPresent, setExternalPresent] = useState<number>(0);
   const [externalAbsent, setExternalAbsent] = useState<number>(0);
   const [showExternalImageModal, setShowExternalImageModal] = useState(false);
 
-  // New Student modal
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentAge, setNewStudentAge] = useState<number>(10);
   const [newStudentGender, setNewStudentGender] = useState<'M' | 'F'>('M');
 
+  const [dropoutTarget, setDropoutTarget] = useState<Student | null>(null);
+
   useEffect(() => {
     fetchStudents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId]);
 
   const fetchStudents = async () => {
@@ -62,9 +104,7 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
         setStudents(res.data);
         const initialMap: Record<string, boolean> = {};
         res.data.forEach((s: Student) => {
-          if (s.status === 'ACTIVE') {
-            initialMap[s.id] = true; // Default to present when opening session
-          }
+          if (s.status === 'ACTIVE') initialMap[s.id] = true; // começa como presente
         });
         setAttendance(initialMap);
       } else {
@@ -81,63 +121,62 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
         setStudents(mapped);
         const initialMap: Record<string, boolean> = {};
         mapped.forEach((s) => {
-          if (s.status === 'ACTIVE') {
-            initialMap[s.id] = true;
-          }
+          if (s.status === 'ACTIVE') initialMap[s.id] = true;
         });
         setAttendance(initialMap);
       }
-    } catch (error) {
-      console.error('Error loading students:', error);
+    } catch (err) {
+      console.error('Error loading students:', err);
     }
   };
 
   const openStudentHistoryModal = async (studentId: string) => {
     setLoadingHistory(true);
+    const studentObj = students.find((s) => s.id === studentId);
+    // abre já com os dados que temos, e completa quando a API responder
+    setSelectedStudentHistory({
+      student: studentObj,
+      stats: {
+        presenceRate: studentObj?.presenceRate ?? 100,
+        totalPresence: studentObj?.totalPresence ?? 0,
+        totalAbsence: studentObj?.totalAbsence ?? 0,
+        consecutiveAbsences: studentObj?.consecutiveAbsences ?? 0,
+      },
+      timeline: [],
+    });
     try {
       if (isOnline()) {
         const res = await api.get(`/students/${studentId}/history`);
         setSelectedStudentHistory(res.data);
-      } else {
-        const studentObj = students.find((s) => s.id === studentId);
-        setSelectedStudentHistory({
-          student: studentObj,
-          stats: {
-            presenceRate: studentObj?.presenceRate || 100,
-            totalPresence: studentObj?.totalPresence || 0,
-            totalAbsence: studentObj?.totalAbsence || 0,
-            consecutiveAbsences: studentObj?.consecutiveAbsences || 0,
-            totalSessions: (studentObj?.totalPresence || 0) + (studentObj?.totalAbsence || 0),
-          },
-          timeline: [],
-        });
       }
-    } catch (error) {
-      console.error('Error loading student history:', error);
+    } catch (err) {
+      console.error('Error loading student history:', err);
     } finally {
       setLoadingHistory(false);
     }
   };
 
   const setStudentPresence = (studentId: string, isPresent: boolean) => {
-    setAttendance((prev) => ({
-      ...prev,
-      [studentId]: isPresent,
-    }));
+    setAttendance((prev) => ({ ...prev, [studentId]: isPresent }));
+  };
+
+  const setAll = (isPresent: boolean) => {
+    const map: Record<string, boolean> = {};
+    students.filter((s) => s.status === 'ACTIVE').forEach((s) => (map[s.id] = isPresent));
+    setAttendance(map);
   };
 
   const activeStudents = students.filter((s) => s.status === 'ACTIVE');
-  const presentCount = Object.values(attendance).filter(Boolean).length;
+  const presentCount = activeStudents.filter((s) => attendance[s.id]).length;
   const absentCount = activeStudents.length - presentCount;
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudentName) return;
-
+    if (!newStudentName.trim()) return;
     try {
       if (isOnline()) {
         const res = await api.post('/students', {
-          name: newStudentName,
+          name: newStudentName.trim(),
           age: newStudentAge,
           gender: newStudentGender,
           schoolId,
@@ -147,7 +186,7 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
       } else {
         const id = await db.offlineStudents.add({
           schoolId,
-          name: newStudentName,
+          name: newStudentName.trim(),
           age: newStudentAge,
           gender: newStudentGender,
           status: 'ACTIVE',
@@ -155,7 +194,7 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
         });
         const newObj: Student = {
           id: `temp_${id}`,
-          name: newStudentName,
+          name: newStudentName.trim(),
           age: newStudentAge,
           gender: newStudentGender,
           status: 'ACTIVE',
@@ -165,14 +204,14 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
       }
       setNewStudentName('');
       setShowAddStudent(false);
-    } catch (error) {
-      console.error('Error adding student:', error);
+    } catch (err) {
+      console.error('Error adding student:', err);
     }
   };
 
-  const handleMarkDropout = async (studentId: string) => {
-    if (!confirm('Deseja marcar a desistência deste aluno? As métricas anteriores serão congeladas na data atual.')) return;
-
+  const confirmDropout = async () => {
+    if (!dropoutTarget) return;
+    const studentId = dropoutTarget.id;
     try {
       if (isOnline()) {
         await api.patch(`/students/${studentId}/dropout`, { dropoutDate: new Date() });
@@ -180,26 +219,28 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
       setStudents((prev) =>
         prev.map((s) => (s.id === studentId ? { ...s, status: 'DROPOUT', dropoutDate: new Date().toISOString() } : s))
       );
-    } catch (error) {
-      console.error('Error marking dropout:', error);
+    } catch (err) {
+      console.error('Error marking dropout:', err);
+    } finally {
+      setDropoutTarget(null);
     }
   };
 
   const handleExternalPhotoCaptured = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
-    const file = files[0];
-    const compressed = await compressPhoto(file);
+    const compressed = await compressPhoto(files[0]);
     setExternalPhoto(compressed);
   };
 
   const handleSubmitAttendance = async () => {
     setLoading(true);
+    setError('');
     try {
       const payload = {
         date: new Date().toISOString(),
         schoolId,
         type: submodule,
-        category, // 'Ensaio' | 'Reposição' | 'Reforço'
+        category,
         countPresent: submodule === 'MANUAL' ? presentCount : externalPresent,
         countAbsent: submodule === 'MANUAL' ? absentCount : externalAbsent,
         records:
@@ -228,185 +269,158 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
       setSubmitted(true);
       setShowAttendanceModal(false);
       onComplete(true);
-      fetchStudents(); // Refresh consecutive absences stats
-    } catch (error) {
-      console.error('Error submitting attendance:', error);
+      fetchStudents();
+    } catch (err) {
+      console.error('Error submitting attendance:', err);
+      setError('Não foi possível enviar a chamada. Confira a internet e tente de novo.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-6 bg-white rounded-b-bento-lg space-y-6">
-      {/* Submodule selector tabs */}
-      <div className="flex bg-gray-100 p-1.5 rounded-full max-w-md mx-auto">
-        <button
-          type="button"
-          onClick={() => setSubmodule('MANUAL')}
-          className={`flex-1 py-2.5 px-4 text-sm font-extrabold rounded-full transition-all ${
-            submodule === 'MANUAL'
-              ? 'bg-accentMint text-white shadow-md'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Chamada no App
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubmodule('EXTERNAL')}
-          className={`flex-1 py-2.5 px-4 text-sm font-extrabold rounded-full transition-all ${
-            submodule === 'EXTERNAL'
-              ? 'bg-accentMint text-white shadow-md'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Anexar Lista Externa
-        </button>
+    <div className="p-4 sm:p-6 bg-white rounded-b-bento-lg space-y-5">
+      {/* Abas */}
+      <div className="grid grid-cols-2 bg-gray-100 p-1.5 rounded-full">
+        {(
+          [
+            ['MANUAL', 'Chamada no app'],
+            ['EXTERNAL', 'Lista em papel'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSubmodule(key)}
+            className={`min-h-[48px] px-3 text-sm font-extrabold rounded-full transition-all ${
+              submodule === key ? 'bg-accentMint text-white shadow-md' : 'text-gray-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
+      {error && (
+        <p role="alert" className="text-sm font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-2xl p-3">
+          {error}
+        </p>
+      )}
+
       {submodule === 'MANUAL' ? (
-        <div className="space-y-6">
-          {/* Categoria de Atendimento (Ensaio / Reposição / Reforço) */}
-          <div className="bg-gray-50 border rounded-2xl p-4 space-y-2">
-            <label className="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">
-              Categoria de Atendimento da Sessão:
-            </label>
+        <div className="space-y-5">
+          {/* Tipo do encontro */}
+          <div className="space-y-2">
+            <span className="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">Tipo do encontro</span>
             <div className="grid grid-cols-3 gap-2">
-              {(['Ensaio', 'Reposição', 'Reforço'] as const).map((cat) => (
+              {(Object.keys(CATEGORY_LABEL) as Category[]).map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setCategory(cat)}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all ${
-                    category === cat
-                      ? 'bg-charcoal text-white shadow-md ring-2 ring-charcoal'
-                      : 'bg-white text-gray-700 border hover:bg-gray-100'
+                  aria-pressed={category === cat}
+                  className={`min-h-[64px] rounded-2xl text-xs font-extrabold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 ${
+                    category === cat ? 'bg-charcoal text-white shadow-md' : 'bg-gray-50 text-gray-700 border'
                   }`}
                 >
-                  {cat === 'Ensaio' ? '🎵 Ensaio (Padrão)' : cat === 'Reposição' ? '🔄 Reposição' : '💪 Reforço'}
+                  <span className="text-xl leading-none">{CATEGORY_LABEL[cat].icon}</span>
+                  {CATEGORY_LABEL[cat].label}
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-gray-500 font-medium pt-1">
-              * A categoria selecionada carimbará o histórico da chamada e as legendas de mídias e relatórios.
-            </p>
           </div>
 
-          {/* Action Header & Primary Start Attendance Button */}
-          <div className="bg-emerald-50/70 border border-emerald-200 rounded-3xl p-5 text-center space-y-3">
-            <div className="flex items-center justify-center gap-2">
-              <UserCheck size={26} className="text-emerald-700" />
-              <h3 className="text-lg font-extrabold text-emerald-950">Chamada Diária dos Alunos</h3>
-            </div>
-            <p className="text-xs text-emerald-800 font-medium max-w-md mx-auto">
-              Clique em &quot;Iniciar Chamada&quot; para abrir a conferência nominal de presença. Alunos com faltas consecutivas estarão destacados.
-            </p>
+          {/* Iniciar chamada */}
+          <button
+            type="button"
+            onClick={() => setShowAttendanceModal(true)}
+            disabled={isReadOnly || activeStudents.length === 0}
+            className="w-full min-h-[64px] rounded-3xl bg-emerald-600 active:bg-emerald-700 disabled:bg-gray-300 text-white font-extrabold text-lg flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-all"
+          >
+            <Play size={22} fill="white" /> {submitted ? 'Refazer a chamada' : 'Fazer a chamada'}
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setShowAttendanceModal(true)}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 mx-auto shadow-lg active:scale-95 transition-all"
-            >
-              <Play size={18} fill="white" /> Iniciar Chamada ({category})
-            </button>
-          </div>
-
-          {/* Consolidated Summary (Rendered after submitted or when active) */}
           {submitted && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
-                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Total Presentes</span>
-                <p className="text-3xl font-extrabold text-emerald-800">{presentCount}</p>
+                <span className="text-[11px] font-extrabold text-emerald-700 uppercase tracking-wider">Presentes</span>
+                <p className="text-4xl font-extrabold text-emerald-800">{presentCount}</p>
               </div>
               <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-center">
-                <span className="text-xs font-bold text-rose-700 uppercase tracking-wider">Total Faltas</span>
-                <p className="text-3xl font-extrabold text-rose-800">{absentCount}</p>
+                <span className="text-[11px] font-extrabold text-rose-700 uppercase tracking-wider">Faltas</span>
+                <p className="text-4xl font-extrabold text-rose-800">{absentCount}</p>
               </div>
             </div>
           )}
 
-          {/* Student List View (With Consecutive Absence Alert Yellow Badge) */}
+          {/* Lista de alunos */}
           <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <div>
-                <h4 className="font-extrabold text-base text-gray-900">
-                  Alunos Cadastrados ({activeStudents.length})
-                </h4>
-                <p className="text-[11px] text-gray-500 font-medium">
-                  Clique no nome para abrir o histórico individual ou gerencie matrículas
-                </p>
+            <div className="flex items-end justify-between gap-2">
+              <div className="min-w-0">
+                <h4 className="font-extrabold text-base text-gray-900">Alunos ({activeStudents.length})</h4>
+                <p className="text-xs text-gray-500 font-medium">Toque no aluno para ver o histórico</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAddStudent(true)}
-                className="flex items-center gap-1.5 text-xs font-bold bg-accentMint/10 text-accentMint px-3.5 py-2 rounded-full hover:bg-accentMint/20 transition shadow-sm"
+                className="min-h-[44px] flex items-center gap-1.5 text-sm font-extrabold bg-accentMint/10 text-accentMint px-4 rounded-full active:bg-accentMint/25 shrink-0"
               >
-                <UserPlus size={14} /> Novo Aluno
+                <UserPlus size={17} /> Novo aluno
               </button>
             </div>
 
             {activeStudents.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-2xl border border-dashed text-xs font-bold">
+              <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-2xl border border-dashed text-sm font-bold">
                 Nenhum aluno ativo nesta escola.
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+              <div className="space-y-2.5">
                 {activeStudents.map((student) => {
-                  const hasAlert = (student.consecutiveAbsences || 0) >= 2;
-
+                  const streak = student.consecutiveAbsences || 0;
+                  const hasAlert = streak >= 2;
                   return (
                     <div
                       key={student.id}
-                      className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all shadow-sm ${
-                        hasAlert
-                          ? 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-400'
-                          : 'bg-gray-50/50 hover:bg-white border-gray-200'
+                      className={`flex items-center gap-2 p-2 pl-3 rounded-2xl border ${
+                        hasAlert ? 'bg-amber-50 border-amber-300' : 'bg-gray-50/60 border-gray-200'
                       }`}
                     >
-                      <div
-                        onClick={() => openStudentHistoryModal(student.id)}
-                        className="flex items-center gap-3 cursor-pointer group flex-1"
-                      >
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center font-extrabold text-sm ${
-                            student.gender === 'M'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-pink-100 text-pink-700'
-                          }`}
-                        >
-                          {student.name.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-gray-900 leading-tight group-hover:text-accentMint transition">
-                              {student.name}
-                            </p>
-                            {hasAlert && (
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shadow-sm ${
-                                  (student.consecutiveAbsences || 0) >= 3
-                                    ? 'bg-rose-600 text-white animate-pulse'
-                                    : 'bg-amber-400 text-amber-950'
-                                }`}
-                                title={(student.consecutiveAbsences || 0) >= 3 ? 'Risco de Evasão Escolar: 3+ faltas seguidas neste mês' : 'Atenção com assiduidade'}
-                              >
-                                <AlertTriangle size={11} /> {(student.consecutiveAbsences || 0) >= 3 ? '⚠️ Risco de Evasão (3+ Faltas)' : `${student.consecutiveAbsences} Faltas Seguidas`}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs text-gray-500 font-medium">
-                            {student.age} anos • {student.gender === 'M' ? 'Masculino' : 'Feminino'} • Frequência: {student.presenceRate ?? 100}%
-                          </span>
-                        </div>
-                      </div>
-
                       <button
                         type="button"
-                        onClick={() => handleMarkDropout(student.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition border border-rose-200 shrink-0 ml-2"
-                        title="Registrar Desistência"
+                        onClick={() => openStudentHistoryModal(student.id)}
+                        className="flex items-center gap-3 flex-1 min-w-0 min-h-[56px] text-left"
                       >
-                        <UserX size={14} /> Desistência
+                        <span
+                          className={`w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-sm shrink-0 ${
+                            student.gender === 'M' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'
+                          }`}
+                        >
+                          {initials(student.name)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-bold text-gray-900 leading-tight truncate">{student.name}</span>
+                          <span className="block text-xs text-gray-500 font-medium">
+                            {student.age} anos · {student.gender === 'M' ? 'Menino' : 'Menina'} · {student.presenceRate ?? 100}%
+                          </span>
+                          {hasAlert && (
+                            <span
+                              className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                                streak >= 3 ? 'bg-rose-600 text-white' : 'bg-amber-400 text-amber-950'
+                              }`}
+                            >
+                              <AlertTriangle size={11} /> {streak >= 3 ? 'Risco de evasão' : `${streak} faltas seguidas`}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDropoutTarget(student)}
+                        disabled={isReadOnly}
+                        aria-label={`Registrar desistência de ${student.name}`}
+                        className="h-12 w-12 rounded-full text-rose-600 bg-rose-50 active:bg-rose-100 border border-rose-200 flex items-center justify-center shrink-0 disabled:opacity-40"
+                      >
+                        <UserX size={19} />
                       </button>
                     </div>
                   );
@@ -416,362 +430,369 @@ export const FolderAttendance: React.FC<FolderAttendanceProps> = ({ schoolId, on
           </div>
         </div>
       ) : (
-        /* Submodule B: External List Upload */
-        <div className="space-y-6">
-          <div className="border-2 border-dashed border-gray-300 rounded-3xl p-6 text-center hover:border-accentMint transition bg-gray-50/50">
-            <Upload size={36} className="mx-auto text-accentMint mb-2" />
-            <p className="text-sm font-bold text-gray-700">Foto da Folha Física ou PDF</p>
-            <p className="text-xs text-gray-500 mb-4">Anexe a imagem da lista física com assinaturas</p>
-
-            <button
-              type="button"
-              onClick={() => setShowExternalImageModal(true)}
-              className="inline-block bg-charcoal text-white text-xs font-extrabold px-6 py-3 rounded-full cursor-pointer hover:bg-black shadow-md transition"
-            >
-              Anexar Foto da Lista
-            </button>
-
-            {externalPhoto && (
-              <div className="mt-4">
-                <img
-                  src={externalPhoto}
-                  alt="Lista física"
-                  className="max-h-48 mx-auto rounded-2xl border shadow-sm"
-                />
-              </div>
+        /* Lista em papel */
+        <div className="space-y-5">
+          <button
+            type="button"
+            onClick={() => setShowExternalImageModal(true)}
+            className="w-full rounded-3xl border-2 border-dashed border-gray-300 bg-gray-50/60 active:bg-gray-100 p-5 flex flex-col items-center gap-2 min-h-[140px] justify-center"
+          >
+            {externalPhoto ? (
+              <img src={externalPhoto} alt="Lista em papel" className="max-h-48 rounded-2xl border shadow-sm" />
+            ) : (
+              <span className="h-16 w-16 rounded-full bg-charcoal text-white flex items-center justify-center shadow-lg">
+                <Camera size={30} />
+              </span>
             )}
-          </div>
+            <span className="text-base font-extrabold text-gray-900">
+              {externalPhoto ? 'Tirar outra foto da lista' : 'Fotografar a lista em papel'}
+            </span>
+            <span className="text-xs text-gray-500 font-medium">Foto da folha com as assinaturas</span>
+          </button>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Total de Presentes</label>
-              <input
-                type="number"
-                min="0"
-                value={externalPresent}
-                onChange={(e) => setExternalPresent(parseInt(e.target.value, 10) || 0)}
-                className="w-full p-3 rounded-2xl border font-bold text-lg text-emerald-800 bg-emerald-50/40 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Total de Faltas</label>
-              <input
-                type="number"
-                min="0"
-                value={externalAbsent}
-                onChange={(e) => setExternalAbsent(parseInt(e.target.value, 10) || 0)}
-                className="w-full p-3 rounded-2xl border font-bold text-lg text-rose-800 bg-rose-50/40 focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-            </div>
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
+            <Stepper label="Total de presentes" value={externalPresent} onChange={setExternalPresent} tone="green" />
+            <Stepper label="Total de faltas" value={externalAbsent} onChange={setExternalAbsent} tone="red" />
           </div>
 
           <button
             type="button"
             onClick={handleSubmitAttendance}
             disabled={loading || submitted || !externalPhoto}
-            className={`w-full py-4 rounded-full font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-2 ${
+            className={`w-full min-h-[56px] rounded-full font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-2 ${
               submitted
-                ? 'bg-emerald-600 text-white cursor-default'
-                : 'bg-charcoal text-white hover:bg-black active:scale-[0.99]'
+                ? 'bg-emerald-600 text-white'
+                : !externalPhoto
+                ? 'bg-gray-200 text-gray-400 shadow-none'
+                : 'bg-charcoal text-white active:scale-[0.98]'
             }`}
           >
             {submitted ? (
               <>
-                <CheckCircle2 size={20} /> Lista Externa Finalizada!
+                <CheckCircle2 size={22} /> Lista enviada!
+              </>
+            ) : loading ? (
+              <>
+                <Loader2 size={20} className="animate-spin" /> Enviando…
               </>
             ) : (
-              'Finalizar Chamada Externa'
+              'Enviar lista em papel'
             )}
           </button>
         </div>
       )}
 
-      {/* DEDICATED ATTENDANCE CONFERENCE MODAL */}
-      {showAttendanceModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-bento-lg p-6 max-w-md w-full space-y-6 shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-3 shrink-0">
-              <div>
-                <h3 className="text-lg font-extrabold text-gray-900">Conferência de Chamada</h3>
-                <p className="text-xs text-gray-500 font-medium">
-                  Sessão: <strong className="text-emerald-800">{category}</strong> • Marque a presença de cada aluno
+      {/* CHAMADA — tela cheia no celular */}
+      <BottomSheet
+        open={showAttendanceModal}
+        onClose={() => setShowAttendanceModal(false)}
+        full
+        title={`Chamada · ${category}`}
+        subtitle="Toque no aluno para marcar presente ou ausente"
+        footer={
+          <div className="space-y-2.5">
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-200 py-2">
+                <span className="text-2xl font-extrabold text-emerald-800 leading-none">{presentCount}</span>
+                <span className="block text-[11px] font-extrabold text-emerald-700 uppercase">Presentes</span>
+              </div>
+              <div className="rounded-2xl bg-rose-50 border border-rose-200 py-2">
+                <span className="text-2xl font-extrabold text-rose-800 leading-none">{absentCount}</span>
+                <span className="block text-[11px] font-extrabold text-rose-700 uppercase">Ausentes</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSubmitAttendance}
+              disabled={loading}
+              className="w-full min-h-[56px] rounded-full font-extrabold text-base bg-charcoal text-white shadow-xl active:scale-[0.98] transition flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" /> Enviando…
+                </>
+              ) : (
+                <>
+                  <Check size={20} /> Finalizar e enviar chamada
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="flex gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setAll(true)}
+            className="flex-1 min-h-[46px] rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm font-extrabold active:bg-emerald-100"
+          >
+            Todos presentes
+          </button>
+          <button
+            type="button"
+            onClick={() => setAll(false)}
+            className="flex-1 min-h-[46px] rounded-full bg-rose-50 text-rose-800 border border-rose-200 text-sm font-extrabold active:bg-rose-100"
+          >
+            Todos ausentes
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {activeStudents.map((student) => {
+            const isPresent = !!attendance[student.id];
+            const streak = student.consecutiveAbsences || 0;
+            return (
+              <button
+                key={student.id}
+                type="button"
+                role="switch"
+                aria-checked={isPresent}
+                aria-label={`${student.name}: ${isPresent ? 'presente' : 'ausente'}`}
+                onClick={() => setStudentPresence(student.id, !isPresent)}
+                className={`w-full min-h-[68px] flex items-center gap-3 px-3 py-2 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${
+                  isPresent ? 'bg-emerald-50 border-emerald-300' : 'bg-rose-50 border-rose-300'
+                }`}
+              >
+                <span
+                  className={`w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-sm shrink-0 ${
+                    student.gender === 'M' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'
+                  }`}
+                >
+                  {initials(student.name)}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-bold text-[15px] text-gray-900 leading-tight truncate">{student.name}</span>
+                  {streak >= 2 && (
+                    <span className="inline-block mt-0.5 text-[11px] font-extrabold text-amber-900 bg-amber-300 px-1.5 py-0.5 rounded">
+                      ⚠️ {streak} faltas seguidas
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={`shrink-0 min-w-[96px] h-11 rounded-xl flex items-center justify-center gap-1 text-sm font-extrabold ${
+                    isPresent ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                  }`}
+                >
+                  {isPresent ? (
+                    <>
+                      <Check size={17} /> Presente
+                    </>
+                  ) : (
+                    <>
+                      <X size={17} /> Ausente
+                    </>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </BottomSheet>
+
+      {/* HISTÓRICO DO ALUNO */}
+      <BottomSheet
+        open={!!selectedStudentHistory}
+        onClose={() => setSelectedStudentHistory(null)}
+        title={selectedStudentHistory?.student?.name || 'Aluno'}
+        subtitle={
+          selectedStudentHistory?.student
+            ? `${selectedStudentHistory.student.age} anos · ${selectedStudentHistory.student.gender === 'M' ? 'Menino' : 'Menina'}`
+            : undefined
+        }
+        footer={
+          <button
+            type="button"
+            onClick={() => setSelectedStudentHistory(null)}
+            className="w-full min-h-[52px] rounded-full font-extrabold text-sm bg-gray-100 text-gray-800 active:bg-gray-200"
+          >
+            Fechar
+          </button>
+        }
+      >
+        {selectedStudentHistory && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
+                <span className="text-[10px] font-extrabold text-emerald-700 uppercase block">Frequência</span>
+                <p className="text-2xl font-extrabold text-emerald-900">{selectedStudentHistory.stats?.presenceRate}%</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center">
+                <span className="text-[10px] font-extrabold text-amber-800 uppercase block">Seguidas</span>
+                <p className="text-2xl font-extrabold text-amber-900">{selectedStudentHistory.stats?.consecutiveAbsences}</p>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-center">
+                <span className="text-[10px] font-extrabold text-indigo-700 uppercase block">P / F</span>
+                <p className="text-xl font-extrabold text-indigo-900 mt-1">
+                  {selectedStudentHistory.stats?.totalPresence} / {selectedStudentHistory.stats?.totalAbsence}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAttendanceModal(false)}
-                className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100"
-              >
-                <X size={20} />
-              </button>
             </div>
 
-            {/* Nominal Student Attendance List */}
-            <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-              {activeStudents.map((student) => {
-                const isPresent = !!attendance[student.id];
-                const hasAlert = (student.consecutiveAbsences || 0) >= 2;
-
-                return (
+            <h4 className="font-extrabold text-xs text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock size={14} className="text-accentMint" /> Histórico de presenças
+            </h4>
+            {loadingHistory ? (
+              <p className="text-sm text-gray-400 text-center py-4">Carregando…</p>
+            ) : !selectedStudentHistory.timeline || selectedStudentHistory.timeline.length === 0 ? (
+              <p className="text-sm text-gray-400 italic py-4 text-center">Sem encontros registrados.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedStudentHistory.timeline.map((item: any) => (
                   <div
-                    key={student.id}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                      hasAlert
-                        ? 'bg-amber-100/80 border-amber-400'
-                        : isPresent
-                        ? 'bg-emerald-50/60 border-emerald-300'
-                        : 'bg-rose-50/60 border-rose-300'
+                    key={item.id}
+                    className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-sm font-bold ${
+                      item.isPresent ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950' : 'bg-rose-50/60 border-rose-200 text-rose-950'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-9 h-9 rounded-full flex items-center justify-center font-extrabold text-xs ${
-                          student.gender === 'M'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-pink-100 text-pink-700'
-                        }`}
-                      >
-                        {student.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <span className="font-bold text-sm text-gray-900 block leading-tight">{student.name}</span>
-                        {hasAlert && (
-                          <span className="text-[10px] font-extrabold text-amber-900 bg-amber-300 px-1.5 py-0.5 rounded">
-                            ⚠️ {student.consecutiveAbsences} Faltas Seguidas
-                          </span>
-                        )}
-                      </div>
+                    <div className="min-w-0">
+                      <span>
+                        {new Date(item.date).toLocaleDateString('pt-BR')} · {item.category}
+                      </span>
+                      {item.justification && <p className="text-xs font-medium text-gray-500">{item.justification}</p>}
                     </div>
-
-                    {/* Standardized Tactile Presence Buttons */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setStudentPresence(student.id, true)}
-                        className={`w-28 h-11 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 transition-all active:scale-95 ${
-                          isPresent
-                            ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-600'
-                            : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'
-                        }`}
-                      >
-                        ✓ Presente
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setStudentPresence(student.id, false)}
-                        className={`w-28 h-11 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 transition-all active:scale-95 ${
-                          !isPresent
-                            ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-600'
-                            : 'bg-gray-100 text-gray-500 hover:bg-rose-100 hover:text-rose-700'
-                        }`}
-                      >
-                        ✕ Ausente
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Bottom Submit Button */}
-            <div className="border-t pt-4 shrink-0">
-              <button
-                type="button"
-                onClick={handleSubmitAttendance}
-                disabled={loading}
-                className="w-full py-4 rounded-full font-extrabold text-sm bg-charcoal text-white hover:bg-black transition shadow-xl active:scale-[0.99]"
-              >
-                {loading ? 'Enviando Chamada...' : `Finalizar e Enviar Chamada (${category})`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STUDENT PERFORMANCE HISTORY MODAL (CLIQUE NO NOME DO ALUNO) */}
-      {selectedStudentHistory && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-bento-lg p-6 max-w-lg w-full space-y-6 shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-accentMint text-white font-extrabold text-lg flex items-center justify-center shadow-md">
-                  {selectedStudentHistory.student?.name?.substring(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-gray-900 leading-tight">
-                    {selectedStudentHistory.student?.name}
-                  </h3>
-                  <p className="text-xs text-gray-500 font-medium">
-                    {selectedStudentHistory.student?.age} anos • {selectedStudentHistory.student?.gender === 'M' ? 'Masculino' : 'Feminino'} • Matrícula Ativa
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedStudentHistory(null)}
-                className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Performance Stats Cards Grid */}
-            <div className="grid grid-cols-3 gap-3 shrink-0">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-center">
-                <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block">Frequência %</span>
-                <p className="text-2xl font-extrabold text-emerald-900 mt-0.5">
-                  {selectedStudentHistory.stats?.presenceRate}%
-                </p>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-center">
-                <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider block">Faltas Seguidas</span>
-                <p className="text-2xl font-extrabold text-amber-900 mt-0.5">
-                  {selectedStudentHistory.stats?.consecutiveAbsences}
-                </p>
-              </div>
-
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5 text-center">
-                <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block">Presenças / Faltas</span>
-                <p className="text-base font-extrabold text-indigo-900 mt-1">
-                  {selectedStudentHistory.stats?.totalPresence}P / {selectedStudentHistory.stats?.totalAbsence}F
-                </p>
-              </div>
-            </div>
-
-            {/* Attendance Session Timeline */}
-            <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-              <h4 className="font-extrabold text-xs text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock size={14} className="text-accentMint" /> Linha do Tempo do Histórico de Presenças
-              </h4>
-
-              {selectedStudentHistory.timeline?.length === 0 ? (
-                <p className="text-xs text-gray-400 italic py-4 text-center">Sem sessões registradas no histórico.</p>
-              ) : (
-                <div className="space-y-2">
-                  {selectedStudentHistory.timeline?.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className={`p-3 rounded-2xl border flex items-center justify-between text-xs font-bold ${
-                        item.isPresent
-                          ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
-                          : 'bg-rose-50/50 border-rose-200 text-rose-950'
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-extrabold shrink-0 ${
+                        item.isPresent ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className={`w-3 h-3 rounded-full shrink-0 ${
-                            item.isPresent ? 'bg-emerald-500' : 'bg-rose-500'
-                          }`}
-                        />
-                        <div>
-                          <span>
-                            {new Date(item.date).toLocaleDateString('pt-BR')} • {item.category}
-                          </span>
-                          {item.justification && (
-                            <p className="text-[11px] font-medium text-gray-500">{item.justification}</p>
-                          )}
-                        </div>
-                      </div>
+                      {item.isPresent ? 'Presente' : 'Falta'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </BottomSheet>
 
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                          item.isPresent
-                            ? 'bg-emerald-200 text-emerald-900'
-                            : 'bg-rose-200 text-rose-900'
-                        }`}
-                      >
-                        {item.isPresent ? 'PRESENTES' : 'FALTA'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+      {/* CONFIRMAR DESISTÊNCIA */}
+      <BottomSheet
+        open={!!dropoutTarget}
+        onClose={() => setDropoutTarget(null)}
+        title="Registrar desistência?"
+        subtitle={dropoutTarget?.name}
+        footer={
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setDropoutTarget(null)}
+              className="min-h-[52px] rounded-full font-extrabold text-sm bg-gray-100 text-gray-800 active:bg-gray-200"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={confirmDropout}
+              className="min-h-[52px] rounded-full font-extrabold text-sm bg-rose-600 text-white active:bg-rose-700"
+            >
+              Confirmar
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-gray-600 font-medium">
+          O aluno deixa de aparecer na chamada e as métricas anteriores ficam congeladas na data de hoje.
+        </p>
+      </BottomSheet>
+
+      {/* NOVO ALUNO */}
+      <BottomSheet
+        open={showAddStudent}
+        onClose={() => setShowAddStudent(false)}
+        title="Novo aluno"
+        footer={
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setShowAddStudent(false)}
+              className="min-h-[52px] rounded-full font-extrabold text-sm bg-gray-100 text-gray-800 active:bg-gray-200"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="form-novo-aluno"
+              disabled={!newStudentName.trim()}
+              className="min-h-[52px] rounded-full font-extrabold text-sm bg-accentMint text-white disabled:bg-gray-300 active:opacity-90"
+            >
+              Cadastrar
+            </button>
+          </div>
+        }
+      >
+        <form id="form-novo-aluno" onSubmit={handleAddStudent} className="space-y-5">
+          <div>
+            <label htmlFor="novo-aluno-nome" className="block text-xs font-extrabold text-gray-700 mb-1.5">
+              Nome completo
+            </label>
+            <input
+              id="novo-aluno-nome"
+              type="text"
+              required
+              autoComplete="off"
+              value={newStudentName}
+              onChange={(e) => setNewStudentName(e.target.value)}
+              placeholder="Nome do aluno"
+              className="w-full h-14 px-4 rounded-2xl border-2 text-base font-medium focus:border-accentMint focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <span className="block text-xs font-extrabold text-gray-700 mb-1.5">Sexo</span>
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ['M', 'Menino', 'bg-blue-600'],
+                  ['F', 'Menina', 'bg-pink-600'],
+                ] as const
+              ).map(([key, label, color]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={newStudentGender === key}
+                  onClick={() => setNewStudentGender(key)}
+                  className={`min-h-[56px] rounded-2xl font-extrabold text-base border-2 transition ${
+                    newStudentGender === key ? `${color} text-white border-transparent shadow-md` : 'bg-white text-gray-700 border-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+          </div>
 
-            <div className="border-t pt-3 shrink-0">
+          <div>
+            <span className="block text-xs font-extrabold text-gray-700 mb-1.5">Idade</span>
+            <div className="flex items-center rounded-2xl border-2 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setSelectedStudentHistory(null)}
-                className="w-full py-3 rounded-full font-bold text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+                aria-label="Diminuir idade"
+                onClick={() => setNewStudentAge((a) => Math.max(4, a - 1))}
+                className="h-14 w-16 flex items-center justify-center active:bg-gray-100 shrink-0"
               >
-                Fechar Histórico
+                <Minus size={22} />
+              </button>
+              <span className="flex-1 text-center text-2xl font-extrabold">{newStudentAge} anos</span>
+              <button
+                type="button"
+                aria-label="Aumentar idade"
+                onClick={() => setNewStudentAge((a) => Math.min(99, a + 1))}
+                className="h-14 w-16 flex items-center justify-center active:bg-gray-100 shrink-0"
+              >
+                <Plus size={22} />
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </form>
+      </BottomSheet>
 
-      {/* Global Image Capture Modal for External List */}
+      {/* Câmera (somente câmera, sem galeria) */}
       <ImageCaptureModal
         isOpen={showExternalImageModal}
         onClose={() => setShowExternalImageModal(false)}
         onCapture={handleExternalPhotoCaptured}
-        title="Anexar Foto da Lista Externa"
+        title="Foto da lista em papel"
       />
-
-      {/* Add Student Modal */}
-      {showAddStudent && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-bento-lg p-6 max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="text-xl font-extrabold text-gray-900">Novo Aluno</h3>
-            <form onSubmit={handleAddStudent} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Nome Completo</label>
-                <input
-                  type="text"
-                  required
-                  value={newStudentName}
-                  onChange={(e) => setNewStudentName(e.target.value)}
-                  placeholder="Nome do aluno"
-                  className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-accentMint focus:outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Idade</label>
-                  <input
-                    type="number"
-                    min="4"
-                    max="99"
-                    required
-                    value={newStudentAge}
-                    onChange={(e) => setNewStudentAge(parseInt(e.target.value, 10))}
-                    className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-accentMint focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Sexo</label>
-                  <select
-                    value={newStudentGender}
-                    onChange={(e) => setNewStudentGender(e.target.value as 'M' | 'F')}
-                    className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-accentMint focus:outline-none"
-                  >
-                    <option value="M">Masculino</option>
-                    <option value="F">Feminino</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddStudent(false)}
-                  className="flex-1 py-3 rounded-full text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 rounded-full text-xs font-bold text-white bg-accentMint hover:bg-accentSage"
-                >
-                  Cadastrar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

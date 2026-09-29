@@ -23,3 +23,6 @@ export function isOnline(): boolean {
   if (typeof window === 'undefined') return true;
   return navigator.onLine;
 }
+
+/** Origem do backend (sem o sufixo /api), usada para carregar arquivos estáticos como as logos. */
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');

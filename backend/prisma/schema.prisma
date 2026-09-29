@@ -226,3 +226,20 @@ model CustomQuestion {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// Configurações do sistema (Google Drive etc.). Segredos ficam criptografados.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Cópia de segurança mensal de todas as estatísticas (gerada automaticamente).
+model MonthlySnapshot {
+  id          String   @id @default(uuid())
+  monthYear   String   @unique // AAAA-MM
+  payload     String   // JSON completo com as estatísticas do mês
+  markdown    String   // versão legível (também enviada ao Drive)
+  driveFileId String?
+  generatedAt DateTime @default(now())
+}

@@ -7,12 +7,14 @@ import {
   endVisit,
   getSchoolDetails,
   getAlertsSummary,
+  getAttendanceTimeline,
 } from '../controllers/schoolController.js';
 import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
 router.get('/', authenticateToken, getSchools);
+router.get('/stats/timeline', authenticateToken, requireAdmin, getAttendanceTimeline);
 router.get('/alerts/summary', authenticateToken, requireAdmin, getAlertsSummary);
 router.get('/:id/details', authenticateToken, getSchoolDetails);
 router.post('/', authenticateToken, requireAdmin, createSchool);

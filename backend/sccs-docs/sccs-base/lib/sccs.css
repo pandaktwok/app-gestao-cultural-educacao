@@ -1,0 +1,126 @@
+/* SCCS — tokens e componentes. Medidas em pt (A4 = 595,28 x 841,89 pt), extraídas dos PDFs aprovados. */
+:root{
+  --verde:#005c35; --verde-rule:#005c34; --vinho:#9b1b1b; --vermelho:#e01226;
+  --grafite:#2b2b2b; --cinza:#555; --cinza-claro:#777; --filete:#cfd8d1; --divisor:#c8c8c8;
+  --rod-texto:#333; --rod-linha:#878787;
+  --creme:#f7f3ea; --menta:#e6efe9; --ouro-escuro:#8a6420; --ouro:#b8893b;
+  --serif-titulo:'Lora',serif; --sans:'Carlito','Liberation Sans',sans-serif; --serif-oficial:'Liberation Serif','Times New Roman',serif;
+  --destaque:'DM Serif Display','Lora',serif;
+  --mx:45.35pt;
+}
+@page{size:210mm 297mm;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:var(--sans);color:var(--grafite)}
+.page{width:210mm;height:297mm;position:relative;overflow:hidden;background:#fff;page-break-after:always;break-after:page}
+.page:last-child{page-break-after:auto;break-after:auto}
+
+/* marca d'água (sempre a logo SCCS, centralizada) */
+.wm{position:absolute;left:30mm;top:78mm;width:150mm;opacity:.025}
+
+/* faixa de logos */
+.strip{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center}
+.strip .row{display:flex;align-items:center;justify-content:center}
+.strip .grp{display:flex;align-items:center}
+.strip .grp>img{display:block}
+.strip .div{background:var(--divisor);flex:none}
+
+/* rodapé institucional */
+.ft{position:absolute;left:14mm;right:14mm;bottom:8mm;border-top:.25mm solid var(--rod-linha);padding-top:2mm;text-align:center;
+  font-family:var(--serif-oficial);font-size:7.5pt;line-height:1.35;color:var(--rod-texto)}
+.pn{position:absolute;right:14mm;bottom:33mm;font-size:8pt;color:var(--vinho)}
+
+/* conteúdo */
+.ct{position:absolute;left:var(--mx);right:var(--mx);bottom:38mm}
+.kick{font-size:9pt;letter-spacing:.18em;text-transform:uppercase;color:var(--verde);font-weight:700;line-height:1.2}
+h1{font-family:var(--serif-titulo);font-size:19pt;font-weight:700;color:var(--vinho);line-height:1.25;margin:7.2pt 0 0}
+.sub{font-size:10.5pt;color:var(--cinza);margin-top:-1.7pt;line-height:1.3}
+h2{font-family:var(--serif-titulo);font-size:13.5pt;font-weight:700;color:var(--vinho);border-bottom:1pt solid var(--verde-rule);
+  padding-bottom:3pt;margin:26pt 0 8pt;display:flex;gap:4pt;align-items:baseline;line-height:1.25}
+h2 i{font-style:normal;font-size:11pt;color:var(--verde)}
+p.txt{font-size:11.8pt;line-height:1.6;text-align:justify}
+
+/* cards de indicador */
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:12pt;margin:9pt 0 0}
+.kp>div{height:70pt;border:1pt solid var(--filete);border-top:3pt solid var(--verde);border-radius:4pt;padding:6pt 12pt;background:rgba(255,255,255,.85)}
+.kp b{display:block;font-family:var(--serif-titulo);font-size:21pt;color:var(--verde);line-height:1.25}
+.kp span{display:block;font-size:9pt;color:var(--cinza);line-height:1.6;margin-top:-1.7pt}
+.kp .r{border-top-color:var(--vermelho)} .kp .r b{color:var(--vermelho)}
+
+/* tabela + barras */
+.tb h4{font-size:10pt;color:var(--verde);text-transform:uppercase;letter-spacing:.06em;margin:7.5pt 0 2.5pt;font-weight:700}
+.tb table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.85)}
+.tb td{border-bottom:1pt solid var(--filete);height:21.5pt;padding:0 3pt;font-size:10pt}
+.tb td.n{text-align:right;font-weight:700;color:var(--verde)} .tb small{font-size:8.3pt;color:var(--cinza-claro)}
+.bars{margin-top:8pt;display:grid;gap:5pt}
+.bars .row{display:grid;grid-template-columns:79pt 1fr 26pt;align-items:center;font-size:9pt;height:10pt}
+.bars .b{height:10pt;border-radius:3pt;background:var(--verde)} .bars .row b{padding-left:3pt;color:var(--grafite)}
+.bars .r .b{background:var(--vermelho)}
+
+/* destaque de resultado */
+.quote{margin:11pt 0 0;padding:7.5pt 14pt 4.5pt;border-left:4pt solid var(--vermelho);font-family:var(--serif-titulo);font-size:12pt;color:#333;background:rgba(224,18,38,.051);line-height:1.6}
+
+/* fotos */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14pt;margin-top:17pt}
+figure.ph{position:relative;height:187pt;border-radius:4pt;overflow:hidden;background:#ddd}
+figure.ph img.f{width:100%;height:100%;object-fit:cover;display:block}
+figure.ph figcaption{position:absolute;left:0;right:0;bottom:0;height:34pt;background:rgba(0,92,53,.93);border-top:1pt solid #fff;color:#fff;
+  display:grid;grid-template-columns:auto 1fr;column-gap:7pt;align-items:center;padding:0 9pt;font-size:8.5pt;line-height:1.3}
+figure.ph figcaption b{grid-row:span 2;font-family:var(--serif-titulo);font-size:14pt}
+figure.ph figcaption .t{font-weight:700;align-self:end}
+figure.ph figcaption .d{align-self:start}
+
+/* identificação / assinaturas */
+.sig{margin-top:16pt}
+.sig>div{display:grid;grid-template-columns:97pt 1fr;height:24.6pt;align-items:center;border-bottom:1pt solid var(--filete);font-size:10.8pt}
+.sig b{color:var(--verde)}
+.lines{display:grid;grid-template-columns:1fr 1fr;gap:45pt;margin-top:79pt}
+.lines span{border-top:1pt solid #333;text-align:center;font-size:9.5pt;padding-top:6pt}
+
+/* capa */
+.cv{position:absolute;left:0;right:0;text-align:center}
+.cv .kick{text-align:center}
+.cv h1{font-size:26pt;line-height:1.15;margin:8.8pt 0 0}
+.cv .rule{width:85pt;height:3pt;background:var(--vermelho);margin:7.4pt auto 0}
+.cv p{font-size:12pt;margin-top:16.5pt}
+.cvinfo{position:absolute;left:var(--mx);right:var(--mx);top:641pt;border-top:1pt solid var(--verde-rule);padding-top:11.2pt;
+  display:grid;grid-template-columns:261pt 1fr;font-size:10pt;line-height:13pt}
+.cvinfo b{color:var(--verde);display:block}
+.cvinfo .gap{height:13pt}
+
+/* carta / papel timbrado */
+.carta{font-family:var(--serif-oficial);color:#222}
+.carta .ct{left:24mm;right:24mm;top:46mm;bottom:40mm}
+.carta .num{font-size:10.5pt;color:var(--cinza);text-align:right}
+.carta h1{font-size:17pt;color:var(--vinho);text-align:center;letter-spacing:.06em;text-transform:uppercase;margin:6mm 0 1.5mm;line-height:1.25}
+.carta .rule{width:73pt;height:3pt;background:var(--verde);margin:0 auto 9mm}
+.carta .dest{font-size:11.5pt;line-height:1.5;margin-bottom:8mm}
+.carta .dest b{color:var(--verde)}
+.carta p{font-size:12pt;line-height:1.7;text-align:justify;text-indent:12mm;margin-bottom:4.5mm}
+.carta p b{color:#111}
+.ph{background:rgba(0,92,53,.078);padding:0 1mm;border-radius:.6mm}
+.carta .data{font-size:12pt;margin:10mm 0 0;text-align:right}
+.carta .sg{position:absolute;left:0;right:0;bottom:0;text-align:center}
+.carta .sg .ln{width:221pt;border-top:.3mm solid #212121;margin:0 auto 1.5mm}
+.carta .sg b{font-size:12pt;display:block;color:#222}.carta .sg span{font-size:10.5pt;color:#444;display:block;line-height:1.35}
+
+/* ===== EXTENSÃO DO APP DE GESTÃO (nominata e chamada) — usa só os tokens acima ===== */
+.nom{display:flex;gap:10pt;margin-top:10pt;align-items:flex-start}
+.nom table,.ch table{border-collapse:collapse;table-layout:fixed;background:rgba(255,255,255,.85)}
+.nom table{flex:1;min-width:0}
+.ch table{width:100%;margin-top:10pt}
+.nom th,.ch th{font-size:8pt;color:var(--verde);text-transform:uppercase;letter-spacing:.05em;font-weight:700;text-align:left;
+  border-bottom:1pt solid var(--verde-rule);height:15pt;padding:0 2pt}
+.nom td,.ch td{border-bottom:1pt solid var(--filete);height:15.5pt;padding:0 2pt;font-size:8.8pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nom3 td{font-size:8.2pt}
+.nom .c,.ch .c{text-align:center}
+.nom td.nn,.ch td.nn{color:var(--cinza-claro);text-align:center}
+.nom td.v,.ch td.v{text-align:center;font-weight:700;color:var(--verde)}
+.nom td.z,.ch td.z{text-align:center;font-weight:700;background:rgba(224,18,38,.051)}
+.ch td.m{text-align:center;font-weight:700;font-size:8pt;padding:0}
+.ch td.mp{color:var(--verde)}
+.ch td.mf{background:rgba(224,18,38,.09)}
+.ch td.mz{color:var(--divisor)}
+.ch tr.tot td{border-top:1pt solid var(--verde-rule);font-weight:700;color:var(--verde);text-align:center}
+.ch tr.tot td.lb{text-align:right;color:var(--cinza)}
+.nota{font-size:8.3pt;color:var(--cinza-claro);margin-top:6pt;line-height:1.4}

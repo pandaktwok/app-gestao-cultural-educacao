@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { RelatorioGeralMensal, RelatorioAnual } from './RelatorioGeral';
+import { ConfiguracoesDrive } from './ConfiguracoesDrive';
 import { Users, School as SchoolIcon, Filter, Key, Plus, FileSpreadsheet, Link as LinkIcon, BarChart3, Calendar as CalendarIcon, MapPin, X, Phone, Mail, UserCheck, Clock, Award, AlertTriangle, Eye, ChevronRight, FileText, ShieldCheck } from 'lucide-react';
 import { BentoCard } from '../bento/BentoCard';
 import { api } from '../../lib/api';
@@ -218,10 +220,68 @@ const AttendanceGroupedBarChart: React.FC<AttendanceGroupedBarChartProps> = ({
   );
 };
 
+const MONTH_LABELS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+/** Agrupa as chamadas REAIS de uma escola por dia, semana ou mês. */
+function buildPeriodSeries(
+  sessions: any[],
+  students: any[],
+  period: 'dia' | 'semana' | 'mes'
+): { day: string; presentes: number; faltas: number; desistencias: number }[] {
+  const keyOf = (d: Date) => {
+    if (period === 'dia') return { k: d.toISOString().slice(0, 10), label: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) };
+    if (period === 'semana') {
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      return { k: monday.toISOString().slice(0, 10), label: `Sem ${monday.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` };
+    }
+    return { k: `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`, label: MONTH_LABELS_PT[d.getMonth()] };
+  };
+
+  const buckets = new Map<string, { day: string; presentes: number; faltas: number; desistencias: number }>();
+  const add = (date: Date, p: number, f: number, x: number) => {
+    const { k, label } = keyOf(date);
+    const cur = buckets.get(k) || { day: label, presentes: 0, faltas: 0, desistencias: 0 };
+    cur.presentes += p;
+    cur.faltas += f;
+    cur.desistencias += x;
+    buckets.set(k, cur);
+  };
+
+  sessions.forEach((s) => add(new Date(s.date), s.present ?? s.countPresent ?? 0, s.absent ?? s.countAbsent ?? 0, 0));
+  students.filter((st) => st.status === 'DROPOUT' && st.dropoutDate).forEach((st) => add(new Date(st.dropoutDate), 0, 0, 1));
+
+  const ordered = Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+  return period === 'mes' ? ordered : ordered.slice(-8);
+}
+
+type AdminTab = 'METRICS' | 'TEACHERS' | 'SCHOOLS' | 'CALENDAR' | 'REPORTS' | 'ANNUAL' | 'FORM_MANAGER' | 'NOTIFICATIONS' | 'REPORT_GENERAL' | 'SETTINGS';
+const NAV_GROUPS: { title: string; items: { tab: AdminTab; label: string; icon: string }[] }[] = [
+  { title: 'Visão geral', items: [
+    { tab: 'METRICS', label: 'Métricas da rede', icon: '📊' },
+    { tab: 'NOTIFICATIONS', label: 'Central de alertas', icon: '🔔' },
+  ] },
+  { title: 'Relatórios', items: [
+    { tab: 'REPORT_GENERAL', label: 'Relatório geral mensal', icon: '🧾' },
+    { tab: 'ANNUAL', label: 'Relatório anual', icon: '📅' },
+    { tab: 'REPORTS', label: 'Auditoria & respostas', icon: '🔎' },
+  ] },
+  { title: 'Cadastros', items: [
+    { tab: 'SCHOOLS', label: 'Escolas', icon: '🏫' },
+    { tab: 'TEACHERS', label: 'Professores', icon: '👩‍🏫' },
+    { tab: 'CALENDAR', label: 'Calendário', icon: '🗓️' },
+    { tab: 'FORM_MANAGER', label: 'Questionários', icon: '📝' },
+  ] },
+  { title: 'Sistema', items: [
+    { tab: 'SETTINGS', label: 'Configurações · Drive', icon: '⚙️' },
+  ] },
+];
+
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'METRICS' | 'TEACHERS' | 'SCHOOLS' | 'CALENDAR' | 'REPORTS' | 'ANNUAL' | 'FORM_MANAGER' | 'NOTIFICATIONS'>('METRICS');
+  const [activeTab, setActiveTab] = useState<'METRICS' | 'TEACHERS' | 'SCHOOLS' | 'CALENDAR' | 'REPORTS' | 'ANNUAL' | 'FORM_MANAGER' | 'NOTIFICATIONS' | 'REPORT_GENERAL' | 'SETTINGS'>('METRICS');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
+  const [timelineRecords, setTimelineRecords] = useState<AttendanceRecord[]>([]);
 
   // Alerts Summary State
   const [alertsSummary, setAlertsSummary] = useState<any | null>(null);
@@ -373,9 +433,14 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [uRes, sRes] = await Promise.all([api.get('/auth/users'), api.get('/schools')]);
+      const [uRes, sRes, tRes] = await Promise.all([
+        api.get('/auth/users'),
+        api.get('/schools'),
+        api.get(`/schools/stats/timeline?year=${new Date().getFullYear()}`),
+      ]);
       setTeachers(uRes.data);
       setSchools(sRes.data);
+      setTimelineRecords(tRes.data);
     } catch (err) {
       console.error('Error fetching admin data:', err);
     }
@@ -514,6 +579,11 @@ export const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('Error linking schools:', err);
     }
+  };
+
+  const goTab = (t: AdminTab) => {
+    if (t === 'NOTIFICATIONS') { fetchAlertsSummary(); return; }
+    setActiveTab(t);
   };
 
   const fetchAnnualReport = async () => {
@@ -663,37 +733,8 @@ export const AdminDashboard: React.FC = () => {
     return true;
   });
 
-  // Dynamic attendance records dataset generation (Jan to Dez per school & teacher)
-  const allAttendanceRecords = useMemo<AttendanceRecord[]>(() => {
-    const records: AttendanceRecord[] = [];
-    schools.forEach((school) => {
-      const assignedTeachers = teachers.filter((t) =>
-        t.teacherSchools?.some((ts) => (ts.school?.id || (ts as any).schoolId) === school.id)
-      );
-      const teacherIds = assignedTeachers.length > 0 ? assignedTeachers.map((t) => t.id) : [teachers[0]?.id || 'default-prof'];
-
-      teacherIds.forEach((profId) => {
-        const baseSeed = (school.name.charCodeAt(0) + profId.charCodeAt(0)) % 15;
-        for (let m = 0; m < 12; m++) {
-          const baseAttended = 35 + baseSeed + ((m * 7 + baseSeed * 3) % 25);
-          const baseAbsent = 4 + ((m * 3 + baseSeed) % 10);
-          const baseDropped = (m === 5 || m === 6 || m === 3) ? ((m + baseSeed) % 2) : 0;
-
-          records.push({
-            id: `rec-${school.id}-${profId}-${m}`,
-            professorId: profId,
-            schoolId: school.id,
-            date: `2026-${(m + 1).toString().padStart(2, '0')}-15`,
-            month: m,
-            attended: baseAttended,
-            absent: baseAbsent,
-            dropped: baseDropped,
-          });
-        }
-      });
-    });
-    return records;
-  }, [schools, teachers]);
+  // Série REAL: cada chamada registrada e cada desistência (vem de /schools/stats/timeline).
+  const allAttendanceRecords = timelineRecords;
 
   // Reactive frequency stats calculated via useFrequencyData hook
   const frequencyChartData = useFrequencyData(
@@ -716,118 +757,47 @@ export const AdminDashboard: React.FC = () => {
   }, [selectedSchoolId, selectedTeacherId, schools, teachers]);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-16">
-      {/* Top Header & Navigation Menu */}
-      <div className="bento-card p-5 space-y-4 bg-gradient-to-r from-adminBlue/10 via-indigo-50/50 to-white border border-adminBlue/20 shadow-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-white p-1.5 border border-adminBlue/30 shadow-md flex items-center justify-center shrink-0">
-              <img src="/logo.png" alt="Sociedade Cultural Cruzeiro do Sul" className="w-full h-full object-contain" />
-            </div>
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-adminBlue bg-adminBlue/10 px-2.5 py-0.5 rounded-full border border-adminBlue/20 inline-block">
-                Diretoria & Coordenação
-              </span>
-              <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight mt-0.5">
-                Painel Executivo da Diretoria
-              </h1>
-            </div>
+    <div className="max-w-[1500px] mx-auto pb-16 lg:grid lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8 items-start">
+      {/* Menu lateral (desktop) / faixa rolável (telas pequenas) */}
+      <aside className="lg:sticky lg:top-24 mb-6 lg:mb-0 bento-card p-3 lg:p-4 space-y-3">
+        <div className="flex items-center gap-3 px-1 lg:pb-3 lg:border-b">
+          <div className="w-11 h-11 rounded-xl bg-white p-1 border border-adminBlue/30 shadow-sm flex items-center justify-center shrink-0">
+            <img src="/logo.png" alt="Sociedade Cultural Cruzeiro do Sul" className="w-full h-full object-contain" />
           </div>
-
-          {/* Navigation Menu Tabs */}
-          <div className="bg-white/90 p-1.5 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-1 overflow-x-auto scrollbar-none max-w-full">
-            <button
-              type="button"
-              onClick={() => setActiveTab('METRICS')}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'METRICS'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('CALENDAR')}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'CALENDAR'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Calendário Global
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('TEACHERS')}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'TEACHERS'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Professores
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('SCHOOLS')}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'SCHOOLS'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Escolas
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('REPORTS')}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'REPORTS'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Auditoria & Respostas
-            </button>
-            <button
-              type="button"
-              onClick={fetchAnnualReport}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'ANNUAL'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Relatório Anual
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('FORM_MANAGER')}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'FORM_MANAGER'
-                  ? 'bg-adminBlue text-white shadow-md scale-[1.02]'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
-              }`}
-            >
-              Gestor de Formulários
-            </button>
-            <button
-              type="button"
-              onClick={fetchAlertsSummary}
-              className={`px-4 py-2 text-xs font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeTab === 'NOTIFICATIONS'
-                  ? 'bg-rose-600 text-white shadow-md scale-[1.02]'
-                  : 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200'
-              }`}
-            >
-              🔔 Central de Alertas
-            </button>
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-adminBlue">Administração</p>
+            <p className="text-sm font-extrabold text-gray-900 leading-tight">Painel da Diretoria</p>
           </div>
         </div>
-      </div>
+        <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible scrollbar-none">
+          {NAV_GROUPS.map((g) => (
+            <div key={g.title} className="flex lg:flex-col gap-1 lg:mb-2">
+              <p className="hidden lg:block text-[10px] font-black uppercase tracking-widest text-gray-400 px-3 pt-2 pb-1">{g.title}</p>
+              {g.items.map((it) => (
+                <button
+                  key={it.tab}
+                  type="button"
+                  onClick={() => goTab(it.tab)}
+                  className={`px-3 min-h-[42px] text-left text-[13px] font-extrabold rounded-xl whitespace-nowrap transition-all flex items-center gap-2.5 ${
+                    activeTab === it.tab
+                      ? 'bg-adminBlue text-white shadow-md'
+                      : it.tab === 'NOTIFICATIONS'
+                      ? 'text-rose-700 bg-rose-50 hover:bg-rose-100'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span aria-hidden className="text-base leading-none">{it.icon}</span>
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
 
+      <main className="min-w-0 space-y-8">
+      {activeTab === 'REPORT_GENERAL' && <RelatorioGeralMensal />}
+      {activeTab === 'SETTINGS' && <ConfiguracoesDrive />}
       {activeTab === 'METRICS' && (
         <div className="space-y-6">
           {/* Filters Bar */}
@@ -1248,47 +1218,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'ANNUAL' && (
-        <div className="space-y-6">
-          <div className="bento-card p-6 bg-amber-50 border border-amber-200">
-            <h3 className="text-xl font-extrabold text-amber-950 mb-2 flex items-center gap-2">
-              <FileSpreadsheet className="text-amber-600" /> Relatório Anual Consolidado Institucional (2026)
-            </h3>
-            <p className="text-xs text-amber-800 font-medium leading-relaxed">
-              Varredura global que compila presenças, total de ensaios, taxa de evasão e links das fotos no Google Drive para prestação de contas aos órgãos concedentes.
-            </p>
-          </div>
-
-          {annualData?.consolidatedSchools && (
-            <div className="space-y-4">
-              {annualData.consolidatedSchools.map((item: any) => (
-                <div key={item.schoolId} className="bento-card p-5 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-                  <div>
-                    <span className="text-[11px] font-bold text-gray-500 uppercase">Escola</span>
-                    <p className="font-extrabold text-sm text-gray-900">{item.schoolName}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-bold text-gray-500 uppercase">Alunos Ativos</span>
-                    <p className="font-extrabold text-sm text-emerald-700">{item.activeStudents}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-bold text-gray-500 uppercase">Desistências</span>
-                    <p className="font-extrabold text-sm text-rose-700">{item.dropoutStudents}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-bold text-gray-500 uppercase">Frequência %</span>
-                    <p className="font-extrabold text-sm text-indigo-700">{item.attendancePercentage}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-bold text-gray-500 uppercase">Ensaios</span>
-                    <p className="font-extrabold text-sm text-amber-700">{item.totalRehearsals}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'ANNUAL' && <RelatorioAnual />}
 
       {/* GESTOR DINÂMICO DE QUESTIONÁRIOS (SEÇÃO 5) */}
       {activeTab === 'FORM_MANAGER' && (
@@ -1636,26 +1566,19 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {(() => {
-                  const basePresent = detailedSchoolData.stats?.totalPresentRecords || 0;
-                  const eventPublicSum = 180;
-                  const periodMult = periodFilter === 'dia' ? 0.3 : periodFilter === 'semana' ? 0.7 : 1;
-                  const totalAttended = Math.round((basePresent + eventPublicSum) * periodMult);
-
+                  const series = buildPeriodSeries(
+                    detailedSchoolData.sessions || [],
+                    detailedSchoolData.students || [],
+                    periodFilter
+                  );
+                  const totalAttended = series.reduce((acc, d) => acc + d.presentes, 0);
                   const audienceData = [
                     {
                       id: "alunos",
-                      label: "Alunos em Ensaios",
-                      value: `${Math.round(basePresent * periodMult)}`,
-                      numericValue: Math.round(basePresent * periodMult),
+                      label: "Presenças em ensaios",
+                      value: `${totalAttended}`,
+                      numericValue: totalAttended,
                       fill: "#00b8d9",
-                    },
-                    {
-                      id: "eventos",
-                      label: "Público em Eventos",
-                      value: `${Math.round(eventPublicSum * periodMult)}`,
-                      numericValue: Math.round(eventPublicSum * periodMult),
-                      fill: "#00b8d9",
-                      opacity: 0.7,
                     },
                   ];
 
@@ -1672,11 +1595,16 @@ export const AdminDashboard: React.FC = () => {
                       </div>
 
                       <div className="bg-white border border-slate-100 rounded-3xl p-4 shadow-sm">
-                        <Widget3
-                          className="bg-transparent text-slate-900 w-full"
-                          period={periodFilter}
-                          title="Evolução de Presença"
-                        />
+                        {series.length === 0 ? (
+                          <p className="text-sm text-slate-500 text-center py-16">Sem chamadas registradas neste período.</p>
+                        ) : (
+                          <Widget3
+                            className="bg-transparent text-slate-900 w-full"
+                            period={periodFilter}
+                            title="Evolução de Presença"
+                            data={series}
+                          />
+                        )}
                       </div>
                     </div>
                   );
@@ -2249,6 +2177,7 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 };

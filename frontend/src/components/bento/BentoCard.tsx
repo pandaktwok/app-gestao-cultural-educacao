@@ -29,26 +29,26 @@ export const BentoCard: React.FC<BentoCardProps> = ({
       onClick={onClick}
       style={{ backgroundColor: bgColor, color: textColor }}
       className={clsx(
-        'rounded-bento-lg p-6 shadow-bento transition-all duration-300 relative overflow-hidden',
+        'rounded-bento-lg p-5 sm:p-6 shadow-bento transition-all duration-300 relative overflow-hidden',
         onClick && 'cursor-pointer hover:shadow-bento-hover hover:-translate-y-1 active:scale-[0.99]',
         className
       )}
     >
       {(title || icon || badge) && (
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-2 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
             {icon && (
               <div className="p-3 rounded-2xl bg-black/5 flex items-center justify-center shrink-0">
                 {icon}
               </div>
             )}
             <div>
-              {title && <h3 className="text-xl font-extrabold tracking-tight">{title}</h3>}
+              {title && <h3 className="text-lg sm:text-xl font-extrabold tracking-tight leading-tight">{title}</h3>}
               {subtitle && <p className="text-sm opacity-70 font-medium">{subtitle}</p>}
             </div>
           </div>
           {badge && (
-            <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-black/10 backdrop-blur-sm">
+            <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-black/10 backdrop-blur-sm whitespace-nowrap shrink-0">
               {badge}
             </span>
           )}

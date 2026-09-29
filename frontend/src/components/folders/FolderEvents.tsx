@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Camera, Plus, CheckCircle2, AlertTriangle, List, MapPin, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Camera, Plus, CheckCircle2, AlertTriangle, List, MapPin } from 'lucide-react';
 import { compressPhoto } from '../../lib/imageUtils';
 import { api, isOnline } from '../../lib/api';
 import { db } from '../../lib/db';
 import { ImageCaptureModal } from '../common/ImageCaptureModal';
 import { InteractiveCalendar, EventItem } from '../common/InteractiveCalendar';
+import { BottomSheet } from '../common/BottomSheet';
 
 interface FolderEventsProps {
   schoolId: string;
@@ -60,10 +61,7 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventName || !eventDate || !eventTime) {
-      alert('Preencha o nome do evento, a data e o horário.');
-      return;
-    }
+    if (!eventName.trim() || !eventDate || !eventTime) return;
 
     setLoading(true);
     try {
@@ -155,68 +153,52 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
     }
   };
 
+  const inputCls = 'w-full h-14 px-4 rounded-2xl border-2 text-base font-medium focus:border-indigo-500 focus:outline-none bg-white';
+
   return (
-    <div className="p-6 bg-white rounded-b-bento-lg space-y-6">
-      {/* Header Info Banner & View Toggle */}
-      <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <CalendarIcon className="text-indigo-600 shrink-0 mt-0.5" size={22} />
-          <div>
-            <h4 className="text-sm font-extrabold text-indigo-950">Módulo de Eventos e Apresentações</h4>
-            <p className="text-xs text-indigo-800 font-medium">
-              Cadastre e gerencie apresentações culturais com visualização em lista e calendário interativo.
-            </p>
-          </div>
-        </div>
+    <div className="p-4 sm:p-6 bg-white rounded-b-bento-lg space-y-5">
+      {/* Cadastrar + alternar visão */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowCreateModal(true)}
+          className="w-full min-h-[60px] rounded-3xl bg-indigo-600 active:bg-indigo-700 text-white text-base font-extrabold flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition"
+        >
+          <Plus size={22} /> Cadastrar evento
+        </button>
 
-        <div className="flex flex-wrap items-center gap-2.5 self-end sm:self-auto">
-          {/* View Mode Switcher */}
-          <div className="flex flex-wrap bg-white p-1 rounded-full border shadow-sm gap-1">
+        <div className="grid grid-cols-2 bg-gray-100 p-1.5 rounded-full">
+          {(
+            [
+              ['LIST', 'Lista', <List key="l" size={17} />],
+              ['CALENDAR', 'Calendário', <CalendarIcon key="c" size={17} />],
+            ] as const
+          ).map(([key, label, icon]) => (
             <button
+              key={key}
               type="button"
-              onClick={() => setViewMode('LIST')}
-              className={`px-3 py-1.5 rounded-full text-xs font-extrabold flex items-center gap-1 transition ${
-                viewMode === 'LIST' ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:text-gray-900'
+              onClick={() => setViewMode(key)}
+              className={`min-h-[48px] rounded-full text-sm font-extrabold flex items-center justify-center gap-1.5 transition ${
+                viewMode === key ? 'bg-indigo-600 text-white shadow' : 'text-gray-600'
               }`}
             >
-              <List size={14} /> Lista
+              {icon} {label}
             </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('CALENDAR')}
-              className={`px-3 py-1.5 rounded-full text-xs font-extrabold flex items-center gap-1 transition ${
-                viewMode === 'CALENDAR' ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <CalendarIcon size={14} /> Calendário
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shrink-0 transition"
-          >
-            <Plus size={16} /> Cadastrar Evento
-          </button>
+          ))}
         </div>
       </div>
 
-      {/* Main View Mode Render */}
       {viewMode === 'CALENDAR' ? (
         <InteractiveCalendar events={events} onAddPhoto={handleOpenAddPhoto} />
       ) : (
-        /* LIST VIEW */
         <div className="space-y-3">
-          <h4 className="font-extrabold text-base text-gray-900">
-            Eventos da Escola ({events.length})
-          </h4>
+          <h4 className="font-extrabold text-base text-gray-900">Eventos da escola ({events.length})</h4>
 
           {events.length === 0 ? (
             <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed text-gray-400 space-y-2">
               <CalendarIcon size={36} className="mx-auto text-gray-300" />
-              <p className="text-xs font-bold text-gray-600">Nenhum evento registrado ainda.</p>
-              <p className="text-[11px] text-gray-400">Clique no botão acima para cadastrar uma apresentação.</p>
+              <p className="text-sm font-bold text-gray-600">Nenhum evento ainda.</p>
+              <p className="text-xs text-gray-400">Toque em &quot;Cadastrar evento&quot; para começar.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -227,79 +209,70 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
                 return (
                   <div
                     key={ev.id || idx}
-                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${
-                      isCompleted
-                        ? 'bg-emerald-50/70 border-emerald-300'
-                        : 'bg-amber-50/80 border-amber-300'
+                    className={`p-4 rounded-2xl border shadow-sm space-y-3 ${
+                      isCompleted ? 'bg-emerald-50/70 border-emerald-300' : 'bg-amber-50/80 border-amber-300'
                     }`}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h5 className="font-extrabold text-sm text-gray-900">{ev.name}</h5>
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h5 className="font-extrabold text-base text-gray-900 leading-tight">{ev.name}</h5>
                         <span
-                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
-                            isCompleted
-                              ? 'bg-emerald-200 text-emerald-900'
-                              : 'bg-amber-200 text-amber-900'
+                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 ${
+                            isCompleted ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
                           }`}
                         >
                           {isCompleted ? (
                             <>
-                              <CheckCircle2 size={12} /> Concluído (100%)
+                              <CheckCircle2 size={12} /> Com foto
                             </>
                           ) : (
                             <>
-                              <AlertTriangle size={12} /> Pendente (Sem Foto)
+                              <AlertTriangle size={12} /> Sem foto
                             </>
                           )}
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-600 font-medium flex items-center gap-2 flex-wrap">
-                        <span>📅 {new Date(ev.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                        {ev.locationAddress && (
-                          <>
-                            <span>•</span>
-                            <span className="flex items-center gap-1 text-gray-700 font-semibold">
-                              <MapPin size={12} className="text-rose-500" /> {ev.locationAddress}
-                            </span>
-                          </>
-                        )}
-                        <span>•</span>
-                        <span>🖼️ {photoCount} foto(s)</span>
+                      <p className="text-sm text-gray-700 font-medium">
+                        📅{' '}
+                        {new Date(ev.date).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                        {' · '}🖼️ {photoCount} {photoCount === 1 ? 'foto' : 'fotos'}
                       </p>
-
-                      {isCompleted && (
-                        <div className="flex gap-2 pt-2">
-                          {(ev.photos || []).slice(0, 4).map((p, pIdx) => (
-                            <img
-                              key={pIdx}
-                              src={p.photoUrl}
-                              alt="Foto do evento"
-                              className="w-12 h-12 object-cover rounded-xl border shadow-sm"
-                            />
-                          ))}
-                        </div>
+                      {ev.locationAddress && (
+                        <p className="text-sm text-gray-700 font-semibold flex items-start gap-1.5">
+                          <MapPin size={15} className="text-rose-500 mt-0.5 shrink-0" /> {ev.locationAddress}
+                        </p>
                       )}
                     </div>
 
-                    {!isCompleted ? (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAddPhoto(ev)}
-                        className="px-5 py-2.5 rounded-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition active:scale-95 shrink-0"
-                      >
-                        <Camera size={16} /> Adicionar Foto
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAddPhoto(ev)}
-                        className="px-4 py-2 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-extrabold text-xs flex items-center justify-center gap-1.5 transition shrink-0"
-                      >
-                        <Camera size={14} /> Mais Fotos
-                      </button>
+                    {isCompleted && (
+                      <div className="flex gap-2 overflow-x-auto">
+                        {(ev.photos || []).slice(0, 6).map((p, pIdx) => (
+                          <img
+                            key={pIdx}
+                            src={p.photoUrl}
+                            alt="Foto do evento"
+                            className="w-16 h-16 object-cover rounded-xl border shadow-sm shrink-0"
+                          />
+                        ))}
+                      </div>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAddPhoto(ev)}
+                      className={`w-full min-h-[52px] rounded-full font-extrabold text-sm flex items-center justify-center gap-2 transition active:scale-[0.98] ${
+                        isCompleted ? 'bg-emerald-100 text-emerald-900 active:bg-emerald-200' : 'bg-amber-600 text-white shadow-md active:bg-amber-700'
+                      }`}
+                    >
+                      <Camera size={19} /> {isCompleted ? 'Tirar mais fotos' : 'Tirar foto do evento'}
+                    </button>
                   </div>
                 );
               })}
@@ -308,95 +281,77 @@ export const FolderEvents: React.FC<FolderEventsProps> = ({ schoolId }) => {
         </div>
       )}
 
-      {/* CREATE EVENT MODAL */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-bento-lg p-6 max-w-sm w-full space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-lg font-extrabold text-gray-900">Cadastrar Novo Evento</h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateEvent} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Nome do Evento *</label>
-                <input
-                  type="text"
-                  required
-                  value={eventName}
-                  onChange={(e) => setEventName(e.target.value)}
-                  placeholder="Ex: Recital de Primavera, Desfile Cívico"
-                  className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Data do Evento *</label>
-                  <input
-                    type="date"
-                    required
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Horário *</label>
-                  <input
-                    type="time"
-                    required
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                    className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Endereço do Local (Opcional)</label>
-                <input
-                  type="text"
-                  value={locationAddress}
-                  onChange={(e) => setLocationAddress(e.target.value)}
-                  placeholder="Ex: Av. Paulista, 1500 - Teatro Municipal"
-                  className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 py-3 rounded-full text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 py-3 rounded-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md"
-                >
-                  {loading ? 'Salvando...' : 'Salvar Evento'}
-                </button>
-              </div>
-            </form>
+      {/* CADASTRAR EVENTO */}
+      <BottomSheet
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Novo evento"
+        footer={
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="min-h-[52px] rounded-full text-sm font-extrabold text-gray-800 bg-gray-100 active:bg-gray-200"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="form-novo-evento"
+              disabled={loading || !eventName.trim()}
+              className="min-h-[52px] rounded-full text-sm font-extrabold text-white bg-indigo-600 disabled:bg-gray-300 active:bg-indigo-700"
+            >
+              {loading ? 'Salvando…' : 'Salvar evento'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="form-novo-evento" onSubmit={handleCreateEvent} className="space-y-4">
+          <div>
+            <label htmlFor="ev-nome" className="block text-xs font-extrabold text-gray-700 mb-1.5">Nome do evento *</label>
+            <input
+              id="ev-nome"
+              type="text"
+              required
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              placeholder="Ex.: Desfile Cívico, Recital"
+              className={inputCls}
+            />
+          </div>
 
-      {/* Global Image Capture Modal */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="ev-data" className="block text-xs font-extrabold text-gray-700 mb-1.5">Data *</label>
+              <input id="ev-data" type="date" required value={eventDate} onChange={(e) => setEventDate(e.target.value)} className={`${inputCls} px-3`} />
+            </div>
+            <div>
+              <label htmlFor="ev-hora" className="block text-xs font-extrabold text-gray-700 mb-1.5">Horário *</label>
+              <input id="ev-hora" type="time" required value={eventTime} onChange={(e) => setEventTime(e.target.value)} className={`${inputCls} px-3`} />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="ev-local" className="block text-xs font-extrabold text-gray-700 mb-1.5">Local (opcional)</label>
+            <input
+              id="ev-local"
+              type="text"
+              value={locationAddress}
+              onChange={(e) => setLocationAddress(e.target.value)}
+              placeholder="Ex.: Praça central, Teatro Municipal"
+              className={inputCls}
+            />
+          </div>
+        </form>
+      </BottomSheet>
+
+      {/* Câmera (somente câmera, sem galeria) */}
       <ImageCaptureModal
         isOpen={showImageModal}
         onClose={() => setShowImageModal(false)}
         onCapture={handlePhotoCaptured}
-        title={`Adicionar Foto: ${pendingEventForPhoto?.name || 'Evento'}`}
+        title={`Foto: ${pendingEventForPhoto?.name || 'Evento'}`}
+        multiple
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../prismaClient.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
-import { googleDriveService } from '../services/googleDriveService.js';
+import { triggerSync } from '../services/driveSyncService.js';
 
 export const createAttendanceSession = async (req: AuthRequest, res: Response) => {
   const {
@@ -80,42 +80,19 @@ export const addRehearsalPhotos = async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const teacher = await prisma.user.findUnique({ where: { id: teacherId } });
-    const school = await prisma.school.findUnique({ where: { id: schoolId } });
-
     const sessionDate = new Date(date);
-    const monthYear = `${String(sessionDate.getMonth() + 1).padStart(2, '0')}_${sessionDate.getFullYear()}`;
-
-    // Ensure Google Drive folders exist
-    const { ensaiosFolderId } = await googleDriveService.ensureFolderStructure(
-      'Projeto Cultural',
-      teacher?.name || 'Professor',
-      school?.name || 'Escola',
-      monthYear
-    );
 
     const createdPhotos = [];
 
     for (let i = 0; i < photoUrls.length; i++) {
       const url = photoUrls[i];
       const photoTime = originalTimestamp ? new Date(originalTimestamp) : sessionDate;
-      const formattedDateStr = photoTime.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-      const fileName = `Ensaio_${formattedDateStr}_${i + 1}.jpg`;
-
-      // Trigger Drive sync upload
-      const googleDriveFileId = await googleDriveService.uploadFile(
-        url, // If base64 or file path
-        fileName,
-        'image/jpeg',
-        ensaiosFolderId
-      );
 
       const photo = await prisma.rehearsalPhoto.create({
         data: {
           date: sessionDate,
           originalTimestamp: photoTime,
           photoUrl: url,
-          googleDriveFileId,
           schoolId,
           teacherId,
         },
@@ -123,6 +100,9 @@ export const addRehearsalPhotos = async (req: AuthRequest, res: Response) => {
 
       createdPhotos.push(photo);
     }
+
+    // Envio ao Google Drive em segundo plano (Escola / Mês / Ensaios)
+    triggerSync();
 
     return res.status(201).json(createdPhotos);
   } catch (error) {
@@ -144,22 +124,11 @@ export const createEventSession = async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const teacher = await prisma.user.findUnique({ where: { id: teacherId } });
     const eventDate = new Date(date);
-    const monthYear = `${String(eventDate.getMonth() + 1).padStart(2, '0')}_${eventDate.getFullYear()}`;
 
     const createdSessions = [];
 
     for (const targetSchoolId of targetSchoolIds) {
-      const school = await prisma.school.findUnique({ where: { id: targetSchoolId } });
-
-      const { eventosFolderId } = await googleDriveService.ensureFolderStructure(
-        'Projeto Cultural',
-        teacher?.name || 'Professor',
-        school?.name || 'Escola',
-        monthYear
-      );
-
       const eventSession = await prisma.eventSession.create({
         data: {
           name,
@@ -174,22 +143,10 @@ export const createEventSession = async (req: AuthRequest, res: Response) => {
       if (Array.isArray(photoUrls) && photoUrls.length > 0) {
         for (let i = 0; i < photoUrls.length; i++) {
           const url = photoUrls[i];
-          const formattedDateStr = eventDate.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-          const sanitizedEventName = name.replace(/[^a-zA-Z0-9]/g, '_');
-          const fileName = `Evento_${sanitizedEventName}_${formattedDateStr}_${i + 1}.jpg`;
-
-          const googleDriveFileId = await googleDriveService.uploadFile(
-            url,
-            fileName,
-            'image/jpeg',
-            eventosFolderId
-          );
-
           const eventPhoto = await prisma.eventPhoto.create({
             data: {
               eventSessionId: eventSession.id,
               photoUrl: url,
-              googleDriveFileId,
             },
           });
 
@@ -203,6 +160,7 @@ export const createEventSession = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    triggerSync();
     return res.status(201).json(createdSessions.length === 1 ? createdSessions[0] : createdSessions);
   } catch (error) {
     console.error('Error creating event session:', error);
@@ -229,41 +187,21 @@ export const addEventPhotos = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Evento não encontrado' });
     }
 
-    const eventDate = eventSession.date;
-    const monthYear = `${String(eventDate.getMonth() + 1).padStart(2, '0')}_${eventDate.getFullYear()}`;
-
-    const { eventosFolderId } = await googleDriveService.ensureFolderStructure(
-      'Projeto Cultural',
-      eventSession.teacher?.name || 'Professor',
-      eventSession.school?.name || 'Escola',
-      monthYear
-    );
-
     const createdPhotos = [];
     for (let i = 0; i < photoUrls.length; i++) {
       const url = photoUrls[i];
-      const formattedDateStr = eventDate.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-      const sanitizedEventName = eventSession.name.replace(/[^a-zA-Z0-9]/g, '_');
-      const fileName = `Evento_${sanitizedEventName}_${formattedDateStr}_${Date.now()}_${i + 1}.jpg`;
-
-      const googleDriveFileId = await googleDriveService.uploadFile(
-        url,
-        fileName,
-        'image/jpeg',
-        eventosFolderId
-      );
 
       const eventPhoto = await prisma.eventPhoto.create({
         data: {
           eventSessionId: eventSession.id,
           photoUrl: url,
-          googleDriveFileId,
         },
       });
 
       createdPhotos.push(eventPhoto);
     }
 
+    triggerSync();
     return res.status(200).json(createdPhotos);
   } catch (error) {
     console.error('Error adding event photos:', error);

@@ -1,22 +1,9 @@
+# Stack de produção/homologação usando SQLite (mesmo banco do schema.prisma).
+# Antes de subir, crie um arquivo .env na raiz com:
+#   JWT_SECRET=<string aleatória com 32+ caracteres>   (ex.: openssl rand -hex 32)
+#   INITIAL_ADMIN_PASSWORD=<senha inicial do administrador>
+#   NEXT_PUBLIC_API_URL=https://seu-dominio/api        (opcional)
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: cultural_app_db
-    restart: always
-    environment:
-      POSTGRES_USER: cultural_user
-      POSTGRES_PASSWORD: cultural_password
-      POSTGRES_DB: cultural_projects_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cultural_user -d cultural_projects_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
@@ -27,30 +14,29 @@ services:
       - "4000:4000"
     environment:
       PORT: 4000
-      NODE_ENV: development
-      DATABASE_URL: postgresql://cultural_user:cultural_password@db:5432/cultural_projects_db?schema=public
-      JWT_SECRET: supersecret_jwt_cultural_projects_2026_key
-      GOOGLE_DRIVE_CREDENTIALS_PATH: ./config/credentials.json
-      GOOGLE_DRIVE_PARENT_FOLDER_ID: root_drive_folder_id_placeholder
+      NODE_ENV: production
+      DATABASE_URL: file:/app/data/prod.db
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env (32+ caracteres)}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      GOOGLE_DRIVE_CREDENTIALS_PATH: /app/config/credentials.json
+      GOOGLE_DRIVE_PARENT_FOLDER_ID: ${GOOGLE_DRIVE_PARENT_FOLDER_ID:-}
     volumes:
       - ./backend/config:/app/config
       - ./backend/uploads:/app/uploads
-    depends_on:
-      db:
-        condition: service_healthy
+      - sqlite_data:/app/data
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     container_name: cultural_app_frontend
     restart: always
     ports:
       - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api
     depends_on:
       - backend
 
 volumes:
-  postgres_data:
+  sqlite_data:

@@ -6,6 +6,7 @@ import { FolderRehearsalPhotos } from './FolderRehearsalPhotos';
 import { FolderEvents } from './FolderEvents';
 import { FolderMonthlyReport } from './FolderMonthlyReport';
 import { api, isOnline } from '../../lib/api';
+import { BottomSheet } from '../common/BottomSheet';
 
 interface StackedFoldersProps {
   schoolId: string;
@@ -57,10 +58,12 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
   // Category Selector Modal State
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [visitCategory, setVisitCategory] = useState<'Ensaio' | 'Reposição' | 'Reforço'>('Ensaio');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   const handleStartVisitClick = () => {
     if (isCoolDown) {
-      alert(`Visita bloqueada por 4h. Disponível novamente em ~${hoursRemaining} horas.`);
+      setNotice(`Visita bloqueada por 4h. Disponível novamente em ~${hoursRemaining} horas.`);
       return;
     }
     setShowCategoryModal(true);
@@ -78,7 +81,8 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
   const handleEndVisit = async () => {
     if (progressPercent < 100) return;
 
-    if (confirm('Deseja encerrar a visita para esta escola? Os dados serão consolidados e o bloqueio de 4h será ativado.')) {
+    {
+      setShowEndConfirm(false);
       const nowIso = new Date().toISOString();
       setIsVisitCompleted(true);
       setLastVisitEndTime(Date.now());
@@ -102,7 +106,7 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
 
   const toggleFolder = (index: number, isLocked: boolean) => {
     if (isLocked && !isCoolDown) {
-      alert('Módulo bloqueado! Clique em "Iniciar Visita" para liberar a chamada e fotos.');
+      setNotice('Toque em "Iniciar visita" para liberar a chamada e as fotos.');
       return;
     }
     setActiveFolder((prev) => (prev === index ? null : index));
@@ -172,42 +176,42 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-12">
       {/* Top Header & Visit Control Card */}
-      <div className="bento-card p-6 space-y-4 shadow-xl">
+      <div className="bento-card p-4 sm:p-6 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <button
             type="button"
             onClick={onBackToSchools}
-            className="text-xs font-extrabold px-4 py-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition flex items-center gap-1"
+            className="min-h-[44px] text-sm font-extrabold px-4 rounded-full bg-gray-100 text-gray-700 active:bg-gray-200 transition flex items-center gap-1"
           >
-            ← Voltar para Escolas
+            ← Escolas
           </button>
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Contexto da Visita</span>
+          <span className="hidden sm:inline text-xs font-bold text-gray-500 uppercase tracking-wider">Contexto da Visita</span>
         </div>
 
         <div>
-          <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">{schoolName}</h2>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight leading-tight">{schoolName}</h2>
           <p className="text-xs text-gray-500 font-medium">
             {isCoolDown
-              ? `Visita encerrada. Período de bloqueio de 24h ativo (Liberado em ~${hoursRemaining}h). Histórico em modo de leitura.`
+              ? `Visita encerrada. Nova chamada liberada em ~${hoursRemaining}h.`
               : isVisitCompleted
               ? 'Visita do dia encerrada e salva com sucesso.'
               : isVisitStarted
-              ? 'Visita em andamento. Conclua os módulos obrigatórios (100%) para liberar o encerramento.'
-              : 'Clique em "Iniciar Visita" para liberar os módulos de chamada e fotos.'}
+              ? 'Visita em andamento. Faça a chamada e tire as fotos para poder encerrar.'
+              : 'Toque em "Iniciar visita" para começar.'}
           </p>
         </div>
 
         {/* VISIT LIFECYCLE ACTION BANNER */}
         {isCoolDown ? (
-          <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
                 <Lock size={20} />
               </div>
               <div>
-                <h4 className="text-sm font-extrabold text-amber-950">Bloqueio de 24h Ativo</h4>
+                <h4 className="text-sm font-extrabold text-amber-950">Visita encerrada</h4>
                 <p className="text-xs text-amber-800">
-                  Novas chamadas e envio de fotos estarão disponíveis em ~{hoursRemaining} horas. O módulo de Eventos permanece editável.
+                  Nova chamada e fotos em ~{hoursRemaining}h. Eventos e relatório continuam abertos.
                 </p>
               </div>
             </div>
@@ -233,13 +237,13 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
             <button
               type="button"
               onClick={onBackToSchools}
-              className="px-5 py-2.5 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs shadow-md transition"
+              className="min-h-[48px] px-5 rounded-full bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-sm shadow-md transition shrink-0"
             >
               Ir ao Hub
             </button>
           </div>
         ) : !isVisitStarted ? (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-center sm:text-left">
               <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
                 <Lock size={20} />
@@ -252,9 +256,9 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
             <button
               type="button"
               onClick={handleStartVisitClick}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95 shrink-0"
+              className="w-full sm:w-auto min-h-[56px] px-8 rounded-full bg-emerald-600 active:bg-emerald-700 text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg transition active:scale-95 shrink-0"
             >
-              <Play size={16} fill="white" /> Iniciar Visita
+              <Play size={18} fill="white" /> Iniciar visita
             </button>
           </div>
         ) : (
@@ -287,28 +291,28 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
                 {progressPercent < 100 ? (
                   <>
                     <AlertCircle size={15} className="text-amber-600 shrink-0" />
-                    <span>Progresso em {progressPercent}%. Complete a chamada e fotos para liberar o encerramento.</span>
+                    <span>Faltam {totalTasks - completedCount} de {totalTasks}: {attendanceDone ? '' : 'chamada'}{!attendanceDone && !photosDone ? ' e ' : ''}{photosDone ? '' : 'fotos'}.</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                    <span className="text-emerald-800 font-bold">100% de progresso atingido! Você pode encerrar a visita.</span>
+                    <span className="text-emerald-800 font-bold">Tudo pronto! Você já pode encerrar a visita.</span>
                   </>
                 )}
               </div>
 
               <button
                 type="button"
-                onClick={handleEndVisit}
+                onClick={() => setShowEndConfirm(true)}
                 disabled={progressPercent < 100}
-                className={`w-full sm:w-auto px-6 py-3 rounded-full font-extrabold text-xs flex items-center justify-center gap-2 transition shadow-md shrink-0 ${
+                className={`w-full sm:w-auto min-h-[52px] px-6 rounded-full font-extrabold text-sm flex items-center justify-center gap-2 transition shadow-md shrink-0 ${
                   progressPercent < 100
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                     : 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg active:scale-95 cursor-pointer'
                 }`}
                 title={progressPercent < 100 ? 'Requer 100% de progresso para encerrar' : 'Encerrar visita'}
               >
-                <LogOut size={16} /> Encerrar Visita
+                <LogOut size={16} /> Encerrar visita
               </button>
             </div>
           </div>
@@ -335,7 +339,7 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
                   backgroundColor: isLocked ? '#E5E7EB' : folder.bgColor,
                   color: isLocked ? '#6B7280' : folder.textColor,
                 }}
-                className={`folder-header p-5 flex items-center justify-between cursor-pointer ${
+                className={`folder-header p-4 sm:p-5 min-h-[72px] flex items-center justify-between cursor-pointer active:brightness-95 ${
                   isLocked ? 'cursor-not-allowed' : ''
                 }`}
               >
@@ -344,7 +348,7 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
                     {isLocked ? <Lock size={22} className="text-gray-500" /> : folder.icon}
                   </div>
                   <div>
-                    <h3 className="text-lg font-extrabold tracking-tight flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-extrabold tracking-tight flex items-center gap-2 flex-wrap">
                       {folder.title}
                       {isLocked && (
                         <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-gray-300 text-gray-700">
@@ -358,7 +362,7 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
                 <div className="flex items-center gap-3">
                   {!isLocked && folder.isCompleted && (
                     <span className="flex items-center gap-1 text-xs font-extrabold bg-white/20 backdrop-blur-md px-3 py-1 rounded-full">
-                      <CheckCircle2 size={14} /> Concluído
+                      <CheckCircle2 size={14} /> <span className="hidden min-[380px]:inline">Concluído</span>
                     </span>
                   )}
                   {!isLocked && (
@@ -390,55 +394,66 @@ export const StackedFolders: React.FC<StackedFoldersProps> = ({ schoolId, school
         })}
       </div>
 
-      {/* CATEGORY SELECTOR MODAL */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-bento-lg p-6 max-w-md w-full space-y-6 shadow-2xl">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto font-extrabold text-xl">
-                📋
-              </div>
-              <h3 className="text-lg font-extrabold text-gray-900">Iniciar Atendimento</h3>
-              <p className="text-xs text-gray-600 font-medium">
-                Selecione a **Categoria de Atendimento** para esta sessão. Este valor carimbará os registros no sistema.
-              </p>
-            </div>
+      {/* AVISO */}
+      <BottomSheet
+        open={!!notice}
+        onClose={() => setNotice(null)}
+        title="Atenção"
+        footer={
+          <button type="button" onClick={() => setNotice(null)} className="w-full min-h-[52px] rounded-full font-extrabold text-sm bg-charcoal text-white">
+            Entendi
+          </button>
+        }
+      >
+        <p className="text-base text-gray-700 font-medium">{notice}</p>
+      </BottomSheet>
 
-            <div className="space-y-3">
-              {[
-                { key: 'Ensaio', title: '🎵 Ensaio (Padrão)', desc: 'Ensaio regular de rotina do projeto' },
-                { key: 'Reposição', title: '🔄 Reposição', desc: 'Reposição de aula/ensaio acumulado' },
-                { key: 'Reforço', title: '💪 Reforço', desc: 'Sessão de reforço ou acompanhamento focalizado' },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => handleConfirmCategory(item.key as any)}
-                  className="w-full p-4 rounded-2xl border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50/50 text-left transition flex items-center justify-between group active:scale-[0.98]"
-                >
-                  <div>
-                    <span className="font-extrabold text-sm text-gray-900 block group-hover:text-emerald-800">
-                      {item.title}
-                    </span>
-                    <span className="text-xs text-gray-500 font-medium">{item.desc}</span>
-                  </div>
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-100 group-hover:bg-emerald-600 group-hover:text-white transition">
-                    Selecionar
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowCategoryModal(false)}
-              className="w-full py-3 rounded-full text-xs font-bold text-gray-500 hover:bg-gray-100 transition"
-            >
-              Cancelar
+      {/* ENCERRAR VISITA */}
+      <BottomSheet
+        open={showEndConfirm}
+        onClose={() => setShowEndConfirm(false)}
+        title="Encerrar a visita?"
+        footer={
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => setShowEndConfirm(false)} className="min-h-[52px] rounded-full font-extrabold text-sm bg-gray-100 text-gray-800 active:bg-gray-200">
+              Voltar
+            </button>
+            <button type="button" onClick={handleEndVisit} className="min-h-[52px] rounded-full font-extrabold text-sm bg-rose-600 text-white active:bg-rose-700">
+              Encerrar
             </button>
           </div>
+        }
+      >
+        <p className="text-base text-gray-700 font-medium">
+          Os dados desta visita serão salvos e uma nova chamada só poderá ser feita daqui a 4 horas.
+        </p>
+      </BottomSheet>
+
+      {/* TIPO DO ENCONTRO */}
+      <BottomSheet
+        open={showCategoryModal}
+        onClose={() => setShowCategoryModal(false)}
+        title="Iniciar visita"
+        subtitle="Qual é o tipo do encontro de hoje?"
+      >
+        <div className="space-y-3 pb-2">
+          {[
+            { key: 'Ensaio', title: '🎵 Ensaio', desc: 'Ensaio regular de rotina' },
+            { key: 'Reposição', title: '🔄 Reposição', desc: 'Reposição de ensaio acumulado' },
+            { key: 'Reforço', title: '💪 Reforço', desc: 'Sessão de reforço ou acompanhamento' },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => handleConfirmCategory(item.key as any)}
+              className="w-full min-h-[72px] p-4 rounded-2xl border-2 border-gray-200 active:border-emerald-500 active:bg-emerald-50 text-left transition active:scale-[0.98]"
+            >
+              <span className="font-extrabold text-base text-gray-900 block">{item.title}</span>
+              <span className="text-sm text-gray-500 font-medium">{item.desc}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </BottomSheet>
     </div>
   );
 };

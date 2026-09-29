@@ -35,3 +35,11 @@ scratch/
 .DS_Store
 Thumbs.db
 .gemini/
+
+# Skills de agentes (terceiros)
+.agents/
+.gemini/
+
+# Python cache
+__pycache__/
+*.pyc

@@ -1,0 +1,85 @@
+[
+  {
+    "id": "sccs",
+    "nome": "Sociedade Cultural Cruzeiro do Sul",
+    "tipo": "sccs",
+    "arquivo": "sccs.png",
+    "nivel": null,
+    "largura_px": 1080,
+    "altura_px": 1080,
+    "qualidade": "ok",
+    "nota": "Marca principal. PNG transparente 1080x1080."
+  },
+  {
+    "id": "musicos-do-futuro",
+    "nome": "Músicos do Futuro",
+    "tipo": "projeto",
+    "arquivo": "musicos-do-futuro.png",
+    "nivel": null,
+    "largura_px": 588,
+    "altura_px": 428,
+    "qualidade": "exemplo",
+    "nota": "Extraída do PDF de exemplo (588 px). Trocar por versão melhor quando houver.",
+    "largura_capa_pt": 124
+  },
+  {
+    "id": "fia-criciuma",
+    "nome": "FIA — Fundo da Infância e Adolescência de Criciúma",
+    "tipo": "fundo",
+    "arquivo": "fia-criciuma.png",
+    "nivel": "municipal",
+    "largura_px": 3756,
+    "altura_px": 1727,
+    "qualidade": "exemplo",
+    "nota": "Extraída do PDF de exemplo.",
+    "largura_capa_pt": 105
+  },
+  {
+    "id": "camil",
+    "nome": "Camil",
+    "tipo": "patrocinador",
+    "arquivo": "camil.png",
+    "nivel": null,
+    "largura_px": 322,
+    "altura_px": 108,
+    "qualidade": "baixa",
+    "nota": "Extraída do PDF de exemplo; só 322 px de largura. Pedir versão melhor.",
+    "largura_capa_pt": 93
+  },
+  {
+    "id": "mercado-livre",
+    "nome": "Mercado Livre",
+    "tipo": "patrocinador",
+    "arquivo": "mercado-livre.png",
+    "nivel": null,
+    "largura_px": 2318,
+    "altura_px": 1883,
+    "qualidade": "exemplo",
+    "nota": "Extraída do PDF de exemplo.",
+    "largura_capa_pt": 66
+  },
+  {
+    "id": "prefeitura-criciuma",
+    "nome": "Prefeitura de Criciúma",
+    "tipo": "orgao-publico",
+    "arquivo": "prefeitura-criciuma.png",
+    "nivel": "municipal",
+    "largura_px": 2631,
+    "altura_px": 1882,
+    "qualidade": "ok",
+    "nota": "Arquivo original (3780x1890, PNG transparente) enviado pelo usuário.",
+    "largura_capa_pt": 79
+  },
+  {
+    "id": "sme-criciuma",
+    "nome": "Secretaria Municipal de Educação de Criciúma",
+    "tipo": "orgao-publico",
+    "arquivo": "sme-criciuma.png",
+    "nivel": "municipal",
+    "largura_px": 194,
+    "altura_px": 83,
+    "qualidade": "baixa",
+    "nota": "Enviada pelo usuário (arquivo \"secretaria municipal da educação.jpg - Editado\"). Só ~194 px de largura útil: pedir versão maior.",
+    "largura_capa_pt": 95
+  }
+]

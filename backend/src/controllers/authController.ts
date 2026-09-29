@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { prisma } from '../prismaClient.js';
 import { ENV } from '../config/env.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
@@ -22,7 +23,10 @@ export const seedAdminIfEmpty = async () => {
   try {
     const adminCount = await prisma.user.count();
     if (adminCount === 0) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const initialPassword =
+        ENV.INITIAL_ADMIN_PASSWORD ||
+        (ENV.IS_PRODUCTION ? crypto.randomBytes(12).toString('base64url') : 'admin123');
+      const hashedPassword = await bcrypt.hash(initialPassword, 10);
       await prisma.user.create({
         data: {
           name: 'Administrador Geral',
@@ -31,12 +35,16 @@ export const seedAdminIfEmpty = async () => {
           phone: '(11) 99999-9999',
           password: hashedPassword,
           role: 'ADMIN',
-          mustChangePassword: false,
+          mustChangePassword: ENV.IS_PRODUCTION,
           avatarColor: '#4A90E2', // Institutional Pastel Blue for Admin
           initialAvatar: 'AD',
         },
       });
-      console.log('✅ Admin inicial criado: CPF 000.000.000-00 / Senha admin123');
+      console.log(
+        ENV.IS_PRODUCTION
+          ? `✅ Admin inicial criado: admin@projeto.org / senha temporária: ${initialPassword} (troque no primeiro acesso)`
+          : '✅ Admin inicial criado (ambiente de desenvolvimento): admin@projeto.org / admin123'
+      );
     }
   } catch (err) {
     console.error('Error seeding initial admin:', err);

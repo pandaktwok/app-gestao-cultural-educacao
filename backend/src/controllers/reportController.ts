@@ -1,7 +1,6 @@
 import { Response } from 'express';
 import { prisma } from '../prismaClient.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
-import { googleDriveService } from '../services/googleDriveService.js';
 
 const STANDARD_NO_DIFFICULTIES_TEXT =
   'Durante as atividades desenvolvidas no mês de referência, não foram observadas ocorrências ou empecilhos de ordem pedagógica ou estrutural.';
@@ -101,27 +100,6 @@ export const saveMonthlyReport = async (req: AuthRequest, res: Response) => {
       ? difficultiesDetails
       : STANDARD_NO_DIFFICULTIES_TEXT;
 
-    const teacher = await prisma.user.findUnique({ where: { id: teacherId } });
-    const school = await prisma.school.findUnique({ where: { id: schoolId } });
-
-    // Ensure Google Drive folder for PDF
-    const { relatoriosFolderId } = await googleDriveService.ensureFolderStructure(
-      projectTitle || 'Projeto Cultural',
-      teacher?.name || 'Professor',
-      school?.name || 'Escola',
-      monthYear
-    );
-
-    let googleDriveFileId = null;
-    if (pdfUrl) {
-      googleDriveFileId = await googleDriveService.uploadFile(
-        pdfUrl,
-        `Relatorio_${monthYear}.pdf`,
-        'application/pdf',
-        relatoriosFolderId
-      );
-    }
-
     const report = await prisma.monthlyReport.upsert({
       where: {
         schoolId_teacherId_monthYear: {
@@ -152,7 +130,6 @@ export const saveMonthlyReport = async (req: AuthRequest, res: Response) => {
         referenceMonthLabel: referenceMonthLabel || undefined,
         locationCityDate: locationCityDate || undefined,
         pdfUrl: pdfUrl || undefined,
-        googleDriveFileId: googleDriveFileId || undefined,
         status: pdfUrl ? 'SUBMITTED' : 'DRAFT',
       },
       create: {
@@ -181,7 +158,7 @@ export const saveMonthlyReport = async (req: AuthRequest, res: Response) => {
         referenceMonthLabel: referenceMonthLabel || null,
         locationCityDate: locationCityDate || null,
         pdfUrl: pdfUrl || null,
-        googleDriveFileId: googleDriveFileId || null,
+        googleDriveFileId: null,
         status: pdfUrl ? 'SUBMITTED' : 'DRAFT',
       },
     });

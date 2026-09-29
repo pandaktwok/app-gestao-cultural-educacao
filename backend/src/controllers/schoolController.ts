@@ -206,9 +206,22 @@ export const getSchoolDetails = async (req: AuthRequest, res: Response) => {
     let totalPresentRecords = 0;
     let totalAbsentRecords = 0;
 
-    school.attendanceSessions.forEach((session) => {
-      totalPresentRecords += session.countPresent;
-      totalAbsentRecords += session.countAbsent;
+    // Fonte da verdade: registros nominais da chamada; se a sessão não tiver
+    // (lista externa), usa os totais informados.
+    const sessionsWithCounts = school.attendanceSessions.map((session) => {
+      const hasRecords = session.attendanceRecords.length > 0;
+      const present = hasRecords
+        ? session.attendanceRecords.filter((r) => r.isPresent).length
+        : session.countPresent;
+      const absent = hasRecords
+        ? session.attendanceRecords.length - present
+        : session.countAbsent;
+      return { ...session, present, absent };
+    });
+
+    sessionsWithCounts.forEach((session) => {
+      totalPresentRecords += session.present;
+      totalAbsentRecords += session.absent;
     });
 
     const activeStudents = school.students.filter((s) => s.status === 'ACTIVE');
@@ -242,7 +255,7 @@ export const getSchoolDetails = async (req: AuthRequest, res: Response) => {
       },
       students: school.students,
       events: school.eventSessions,
-      sessions: school.attendanceSessions,
+      sessions: sessionsWithCounts,
     });
   } catch (error) {
     console.error('Error fetching school details:', error);
@@ -334,3 +347,60 @@ export const getAlertsSummary = async (req: AuthRequest, res: Response) => {
   }
 };
 
+
+/**
+ * Série real de atendimento para os gráficos do painel: uma linha por chamada
+ * (presentes/faltas) e uma linha por desistência (na data em que ocorreu).
+ */
+export const getAttendanceTimeline = async (req: AuthRequest, res: Response) => {
+  try {
+    const year = parseInt(String(req.query.year ?? new Date().getFullYear()), 10);
+    const from = new Date(Date.UTC(year, 0, 1));
+    const to = new Date(Date.UTC(year + 1, 0, 1));
+
+    const [sessions, dropouts] = await Promise.all([
+      prisma.attendanceSession.findMany({
+        where: { date: { gte: from, lt: to } },
+        include: { attendanceRecords: { select: { isPresent: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.student.findMany({
+        where: { status: 'DROPOUT', dropoutDate: { gte: from, lt: to } },
+        select: { id: true, schoolId: true, dropoutDate: true },
+      }),
+    ]);
+
+    const rows = [
+      ...sessions.map((s) => {
+        const hasRecords = s.attendanceRecords.length > 0;
+        const attended = hasRecords ? s.attendanceRecords.filter((r) => r.isPresent).length : s.countPresent;
+        const absent = hasRecords ? s.attendanceRecords.length - attended : s.countAbsent;
+        return {
+          id: s.id,
+          professorId: s.teacherId,
+          schoolId: s.schoolId,
+          date: s.date.toISOString(),
+          month: s.date.getUTCMonth(),
+          attended,
+          absent,
+          dropped: 0,
+        };
+      }),
+      ...dropouts.map((d) => ({
+        id: `drop-${d.id}`,
+        professorId: '',
+        schoolId: d.schoolId,
+        date: d.dropoutDate!.toISOString(),
+        month: d.dropoutDate!.getUTCMonth(),
+        attended: 0,
+        absent: 0,
+        dropped: 1,
+      })),
+    ];
+
+    return res.json(rows);
+  } catch (error) {
+    console.error('Error building attendance timeline:', error);
+    return res.status(500).json({ error: 'Erro ao montar a série de atendimento' });
+  }
+};

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { School, LogOut, Key, Shield, User, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { School, LogOut, Key, Shield, User, Wifi, WifiOff } from 'lucide-react';
 import { api, isOnline } from '../lib/api';
-import { populateTestEnvironment } from '../lib/seedTestEnvironment';
 import { BentoCard } from '../components/bento/BentoCard';
 import { StackedFolders } from '../components/folders/StackedFolders';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
@@ -44,21 +43,6 @@ export default function HomePage() {
   const [teacherSchools, setTeacherSchools] = useState<SchoolItem[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<SchoolItem | null>(null);
   const [pendingFeedbackReports, setPendingFeedbackReports] = useState<any[]>([]);
-  const [seeding, setSeeding] = useState(false);
-
-  const handleDevReset = async () => {
-    if (confirm('⚡ Resetar e repovoar instantaneamente o ambiente com os dados de teste? Todos os dados atuais serão substituídos.')) {
-      setSeeding(true);
-      const res = await populateTestEnvironment();
-      setSeeding(false);
-      if (res.success) {
-        alert('✅ Ambiente de testes reseedado com sucesso!');
-        window.location.reload();
-      } else {
-        alert(`❌ ${res.message}`);
-      }
-    }
-  };
 
   useEffect(() => {
     // Online/Offline detection
@@ -211,7 +195,7 @@ export default function HomePage() {
                 value={loginInput}
                 onChange={(e) => handleCpfInputChange(e.target.value)}
                 placeholder="000.000.000-00"
-                className="w-full p-3.5 rounded-2xl border text-sm font-medium focus:ring-2 focus:ring-charcoal focus:outline-none bg-gray-50 tracking-wider"
+                className="w-full h-14 px-4 rounded-2xl border text-base font-medium focus:ring-2 focus:ring-charcoal focus:outline-none bg-gray-50 tracking-wider"
               />
             </div>
 
@@ -223,37 +207,19 @@ export default function HomePage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full p-3.5 rounded-2xl border text-sm font-medium focus:ring-2 focus:ring-charcoal focus:outline-none bg-gray-50"
+                className="w-full h-14 px-4 rounded-2xl border text-base font-medium focus:ring-2 focus:ring-charcoal focus:outline-none bg-gray-50"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 rounded-full font-extrabold text-sm bg-charcoal text-white hover:bg-black transition shadow-lg active:scale-[0.99]"
+              className="w-full min-h-[56px] rounded-full font-extrabold text-base bg-charcoal text-white hover:bg-black transition shadow-lg active:scale-[0.99]"
             >
               {loading ? 'Entrando...' : 'Entrar no Sistema'}
             </button>
           </form>
 
-          <div className="text-center border-t pt-4 space-y-3">
-            <p className="text-[11px] text-gray-400 font-bold">
-              Credenciais de Teste: <br />
-              <span className="text-gray-700">Admin:</span> CPF <code className="text-gray-800">000.000.000-00</code> / <code className="text-gray-800">admin123</code> <br />
-              <span className="text-gray-700">Professor 1:</span> CPF <code className="text-gray-800">111.222.333-44</code> / <code className="text-gray-800">prof123</code> <br />
-              <span className="text-gray-700">Professor 2:</span> CPF <code className="text-gray-800">555.666.777-88</code> / <code className="text-gray-800">prof123</code>
-            </p>
-
-            <button
-              type="button"
-              onClick={handleDevReset}
-              disabled={seeding}
-              className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition flex items-center justify-center gap-2 shadow-sm"
-            >
-              <RefreshCw size={14} className={seeding ? 'animate-spin' : ''} />
-              {seeding ? 'Resetando Ambiente...' : '[DEV: Resetar Dados de Teste]'}
-            </button>
-          </div>
         </div>
       </main>
     );
@@ -263,8 +229,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-bgLight">
       {/* Top Bar Header */}
       <header className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-white p-1 border border-gray-200 shadow-sm flex items-center justify-center shrink-0">
               <img src="/logo.png" alt="Sociedade Cultural Cruzeiro do Sul" className="w-full h-full object-contain" />
             </div>
@@ -274,39 +240,29 @@ export default function HomePage() {
             >
               {user.initialAvatar}
             </div>
-            <div>
-              <h2 className="font-extrabold text-sm text-gray-900 leading-tight">{user.name}</h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <div className="min-w-0">
+              <h2 className="font-extrabold text-sm text-gray-900 leading-tight truncate">{user.name}</h2>
+              <span className="inline-block whitespace-nowrap text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                 {user.role === 'ADMIN' ? 'Diretoria / Admin' : 'Professor de Campo'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleDevReset}
-              disabled={seeding}
-              className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition flex items-center gap-1.5"
-              title="Limpar e repovoar o banco e IndexedDB com dados simulados"
-            >
-              <RefreshCw size={12} className={seeding ? 'animate-spin' : ''} />
-              {seeding ? 'Resetando...' : 'DEV: Reset Testes'}
-            </button>
-
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <span
-              className={`flex items-center gap-1 text-[11px] font-extrabold px-3 py-1 rounded-full ${
+              aria-label={onlineStatus ? 'Online' : 'Offline'}
+              className={`flex items-center gap-1 text-[11px] font-extrabold px-2.5 sm:px-3 py-1.5 rounded-full ${
                 onlineStatus ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}
             >
               {onlineStatus ? <Wifi size={12} /> : <WifiOff size={12} />}
-              {onlineStatus ? 'Online' : 'Offline (Local-First)'}
+              <span className="hidden sm:inline">{onlineStatus ? 'Online' : 'Offline (Local-First)'}</span>
             </span>
 
             <button
               type="button"
               onClick={handleLogout}
-              className="p-2 rounded-full text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition"
+              className="p-2.5 rounded-full text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition"
               title="Sair"
             >
               <LogOut size={18} />
@@ -426,7 +382,7 @@ export default function HomePage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
-                  className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-charcoal focus:outline-none"
+                  className="w-full h-14 px-4 rounded-2xl border text-base font-medium focus:ring-2 focus:ring-charcoal focus:outline-none"
                 />
               </div>
 
@@ -438,14 +394,14 @@ export default function HomePage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repita a nova senha"
-                  className="w-full p-3 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-charcoal focus:outline-none"
+                  className="w-full h-14 px-4 rounded-2xl border text-base font-medium focus:ring-2 focus:ring-charcoal focus:outline-none"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-full font-extrabold text-xs bg-charcoal text-white hover:bg-black transition shadow-md"
+                className="w-full min-h-[56px] rounded-full font-extrabold text-base bg-charcoal text-white hover:bg-black transition shadow-md"
               >
                 {loading ? 'Salvando...' : 'Salvar Nova Senha'}
               </button>

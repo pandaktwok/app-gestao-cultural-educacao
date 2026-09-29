@@ -9,13 +9,9 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "tsx prisma/seed.ts",
-    "seed:mock": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
+  "prisma": {},
   "dependencies": {
     "@prisma/client": "^5.10.2",
     "bcryptjs": "^2.4.3",
@@ -25,6 +21,7 @@
     "googleapis": "^134.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "prisma": "^5.10.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -34,7 +31,6 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.11.24",
-    "prisma": "^5.10.2",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"
   }

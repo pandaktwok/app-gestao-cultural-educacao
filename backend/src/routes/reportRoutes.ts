@@ -11,10 +11,13 @@ import {
   deletePhotoAudit,
 } from '../controllers/reportController.js';
 import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
+import { generateSccsReportPdf, getSccsLogos } from '../controllers/sccsReportController.js';
 
 const router = Router();
 
 router.get('/monthly', authenticateToken, getOrCreateMonthlyReport);
+router.get('/logos', authenticateToken, getSccsLogos);
+router.post('/monthly/pdf', authenticateToken, generateSccsReportPdf);
 router.post('/monthly', authenticateToken, saveMonthlyReport);
 router.get('/monthly/pending-feedback', authenticateToken, getPendingFeedbackReports);
 router.post('/monthly/:id/question', authenticateToken, requireAdmin, questionReportField);

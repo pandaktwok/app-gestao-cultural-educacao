@@ -55,7 +55,6 @@ cd app-gestao-cultural-educacao
 cd backend
 npm install
 npx prisma db push
-npx prisma db seed
 npm run dev
 ```
 *O servidor Backend executará em `http://localhost:4000/api`.*
@@ -70,15 +69,30 @@ npm run dev
 
 ---
 
-## 🔑 Credenciais para Teste (Seed Inicial)
+## 📄 Relatório mensal no padrão SCCS
 
-### 1. Administrador (Diretoria)
-- **E-mail**: `admin@projeto.org`
-- **Senha**: `admin123`
+O PDF oficial é gerado no **backend** com a skill `sccs-relatorio` (pasta `backend/sccs-docs`): capa, resumo com indicadores,
+nominata dos alunos em 2 ou 3 colunas (idade, sexo, presenças, faltas e frequência), seções 3 a 6, fotos 2×2, registro diário de chamada e assinaturas.
+No passo 7 do assistente você escolhe as logos (e a ordem), gera a prévia (que já é o PDF final) e baixa.
 
-### 2. Professor de Campo
-- **E-mail**: `professor@projeto.org`
-- **Senha**: `prof123`
+**Requisitos no servidor / máquina de desenvolvimento** (o Docker já instala tudo):
+```bash
+pip install playwright pillow
+python -m playwright install chromium
+```
+Variáveis opcionais: `PYTHON_BIN` (padrão `python3`, ou `python` no Windows) e `SCCS_DOCS_DIR` (padrão `backend/sccs-docs`).
+Se o servidor estiver offline ou sem Python, o app gera uma versão simplificada do PDF no próprio aparelho.
+As diferenças em relação à skill original estão em `backend/sccs-docs/EXTENSOES-DO-APP.md`.
+
+---
+
+## 🔑 Primeiro acesso
+
+O banco começa **vazio**. Na primeira execução o sistema cria só o administrador inicial:
+- **Desenvolvimento**: CPF `000.000.000-00` / senha `admin123`
+- **Produção**: a senha temporária aparece uma vez no log do backend (ou defina `INITIAL_ADMIN_PASSWORD`) e a troca é obrigatória no primeiro login.
+
+Depois, o administrador cadastra escolas, professores e alunos pelo painel.
 
 ---
 
