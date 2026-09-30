@@ -87,6 +87,10 @@ export const login = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Credenciais inválidas. Verifique o CPF/E-mail e senha.' });
     }
 
+    if (user.isActive === false) {
+      return res.status(403).json({ error: 'Este acesso está desativado. Fale com a coordenação.' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Credenciais inválidas. Verifique a senha.' });
@@ -254,6 +258,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
         avatarColor: true,
         initialAvatar: true,
         createdAt: true,
+        isActive: true,
         teacherSchools: {
           include: {
             school: true,
@@ -298,5 +303,144 @@ export const updateUserSchools = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error updating user schools:', error);
     return res.status(500).json({ error: 'Erro ao atualizar vínculos de escolas' });
+  }
+};
+
+
+const formatCpf = (cpf: string) => cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+
+const newTempPassword = () => `Mudar${Math.floor(1000 + Math.random() * 9000)}`;
+
+// Editar dados do cadastro (nome, e-mail, CPF, telefone). A senha NÃO é alterada aqui.
+export const updateUser = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { name, email, cpf, phone } = req.body;
+
+  try {
+    const current = await prisma.user.findUnique({ where: { id } });
+    if (!current) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    const data: any = {};
+    if (name !== undefined) {
+      if (!String(name).trim()) return res.status(400).json({ error: 'O nome não pode ficar vazio' });
+      data.name = String(name).trim();
+      data.initialAvatar = getInitials(data.name);
+    }
+    if (email !== undefined) {
+      const e = String(email).toLowerCase().trim();
+      if (!e) return res.status(400).json({ error: 'O e-mail não pode ficar vazio' });
+      const dup = await prisma.user.findFirst({ where: { email: e, NOT: { id } } });
+      if (dup) return res.status(400).json({ error: 'E-mail já cadastrado para outro usuário' });
+      data.email = e;
+    }
+    if (cpf !== undefined) {
+      const digits = String(cpf).replace(/\D/g, '');
+      if (digits.length !== 11) return res.status(400).json({ error: 'CPF inválido. Deve conter 11 dígitos' });
+      const formatted = formatCpf(digits);
+      const dup = await prisma.user.findFirst({
+        where: { OR: [{ cpf: formatted }, { cpf: digits }], NOT: { id } },
+      });
+      if (dup) return res.status(400).json({ error: 'CPF já cadastrado para outro usuário' });
+      data.cpf = formatted;
+    }
+    if (phone !== undefined) data.phone = phone ? String(phone).trim() : null;
+
+    const user = await prisma.user.update({ where: { id }, data });
+    return res.json({
+      message: 'Cadastro atualizado!',
+      user: { id: user.id, name: user.name, email: user.email, cpf: user.cpf, phone: user.phone, role: user.role, isActive: user.isActive },
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar cadastro' });
+  }
+};
+
+// Gera uma nova senha temporária e devolve os dados de acesso para o administrador repassar.
+export const resetUserPassword = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    const tempPassword = newTempPassword();
+    await prisma.user.update({
+      where: { id },
+      data: { password: await bcrypt.hash(tempPassword, 10), mustChangePassword: true },
+    });
+    return res.json({
+      message: 'Senha redefinida. O professor precisará trocá-la no primeiro acesso.',
+      access: { name: user.name, cpf: user.cpf, email: user.email, tempPassword },
+    });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return res.status(500).json({ error: 'Erro ao redefinir senha' });
+  }
+};
+
+// Ativa/desativa o acesso (usado quando o professor já tem histórico e não pode ser apagado).
+export const setUserActive = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const active = !!req.body.active;
+  if (id === req.user?.id && !active) {
+    return res.status(400).json({ error: 'Você não pode desativar o seu próprio acesso' });
+  }
+  try {
+    const user = await prisma.user.update({ where: { id }, data: { isActive: active } });
+    return res.json({ message: active ? 'Acesso reativado' : 'Acesso desativado', isActive: user.isActive });
+  } catch (error) {
+    console.error('Error toggling user:', error);
+    return res.status(500).json({ error: 'Erro ao alterar acesso' });
+  }
+};
+
+// Quantos registros o usuário tem (para o popup de confirmação).
+export const getUserImpact = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const [sessions, reports, rehearsals, events] = await Promise.all([
+      prisma.attendanceSession.count({ where: { teacherId: id } }),
+      prisma.monthlyReport.count({ where: { teacherId: id } }),
+      prisma.rehearsalPhoto.count({ where: { teacherId: id } }),
+      prisma.eventSession.count({ where: { teacherId: id } }),
+    ]);
+    return res.json({ sessions, reports, rehearsals, events, hasHistory: sessions + reports + rehearsals + events > 0 });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao consultar histórico' });
+  }
+};
+
+// Exclui o cadastro. Se houver histórico (chamadas, relatórios, fotos), bloqueia para não apagar estatísticas.
+export const deleteUser = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  if (id === req.user?.id) return res.status(400).json({ error: 'Você não pode excluir o seu próprio cadastro' });
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    if (user.role === 'ADMIN') {
+      const admins = await prisma.user.count({ where: { role: 'ADMIN', isActive: true } });
+      if (admins <= 1) return res.status(400).json({ error: 'Não é possível excluir o único administrador' });
+    }
+
+    const [s, r, p, e] = await Promise.all([
+      prisma.attendanceSession.count({ where: { teacherId: id } }),
+      prisma.monthlyReport.count({ where: { teacherId: id } }),
+      prisma.rehearsalPhoto.count({ where: { teacherId: id } }),
+      prisma.eventSession.count({ where: { teacherId: id } }),
+    ]);
+    if (s + r + p + e > 0) {
+      return res.status(409).json({
+        code: 'HAS_HISTORY',
+        error: `Este professor já tem ${s} chamada(s), ${r} relatório(s), ${p} foto(s) de ensaio e ${e} evento(s). Para não perder as estatísticas, desative o acesso em vez de excluir.`,
+      });
+    }
+
+    await prisma.user.delete({ where: { id } });
+    return res.json({ message: 'Cadastro excluído' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ error: 'Erro ao excluir cadastro' });
   }
 };

@@ -100,10 +100,11 @@ export const getSchools = async (req: AuthRequest, res: Response) => {
 
 export const updateSchool = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { name, boardName, directorName, phone, email, address, logoUrl } = req.body;
+  const { name, boardName, directorName, phone, email, address, logoUrl, themeColor } = req.body;
 
   try {
     const data: any = {};
+    if (themeColor) data.themeColor = themeColor;
     if (name) {
       data.name = name;
       data.initialAvatar = getInitials(name);
@@ -124,6 +125,24 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error updating school:', error);
     return res.status(500).json({ error: 'Erro ao atualizar escola' });
+  }
+};
+
+// Quanto será apagado junto com a escola (usado no popup de confirmação).
+export const getSchoolImpact = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    const [students, sessions, reports, rehearsals, events, teachers] = await Promise.all([
+      prisma.student.count({ where: { schoolId: id } }),
+      prisma.attendanceSession.count({ where: { schoolId: id } }),
+      prisma.monthlyReport.count({ where: { schoolId: id } }),
+      prisma.rehearsalPhoto.count({ where: { schoolId: id } }),
+      prisma.eventSession.count({ where: { schoolId: id } }),
+      prisma.teacherSchool.count({ where: { schoolId: id } }),
+    ]);
+    return res.json({ students, sessions, reports, rehearsals, events, teachers });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao consultar dados da escola' });
   }
 };
 

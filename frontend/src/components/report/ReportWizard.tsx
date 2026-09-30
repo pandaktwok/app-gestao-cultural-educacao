@@ -246,6 +246,10 @@ export interface ReportWizardProps {
   setAchievedResults: (v: string) => void;
   eventPublicCounts: { [eventId: string]: number };
   onEventPublicChange: (eventId: string, count: number) => void;
+  // Perguntas extras da coordenação (opcional)
+  customQuestions?: { id: string; title: string; fieldType: string; isRequired: boolean; options?: string | null }[];
+  customAnswers?: { [id: string]: { title: string; answer: string } };
+  onCustomAnswer?: (q: { id: string; title: string }, answer: string) => void;
   // Fotos
   selectedRehearsalIds: string[];
   onToggleRehearsalPhoto: (id: string) => void;
@@ -279,10 +283,11 @@ export const ReportWizard: React.FC<ReportWizardProps> = (p) => {
       { key: 'avaliacao', label: 'Avaliação' },
       { key: 'dificuldades', label: 'Dificuldades' },
       ...(p.hasDifficulties ? [{ key: 'solucoes', label: 'Soluções' }] : []),
+      ...((p.customQuestions || []).length > 0 ? [{ key: 'extras', label: 'Perguntas da coordenação' }] : []),
       { key: 'fotos', label: 'Fotos' },
       { key: 'documento', label: 'Documento' }
     ],
-    [p.hasDifficulties]
+    [p.hasDifficulties, (p.customQuestions || []).length]
   );
   const step = steps[Math.min(idx, steps.length - 1)];
   const last = idx >= steps.length - 1;
@@ -312,6 +317,10 @@ export const ReportWizard: React.FC<ReportWizardProps> = (p) => {
         return p.hasDifficulties && !p.difficultiesDetails.trim() ? 'Escolha ao menos uma dificuldade ou escreva qual foi.' : null;
       case 'solucoes':
         return p.hasDifficulties && !p.achievedResults.trim() ? 'Escolha ao menos uma solução ou escreva qual foi.' : null;
+      case 'extras': {
+        const miss = (p.customQuestions || []).find((q) => q.isRequired && !(p.customAnswers?.[q.id]?.answer || '').trim());
+        return miss ? `Responda: "${miss.title}"` : null;
+      }
       default:
         return null;
     }
@@ -601,6 +610,61 @@ export const ReportWizard: React.FC<ReportWizardProps> = (p) => {
                 previewLabel="Assim vai aparecer no relatório"
                 placeholder="Outra solução, com suas palavras"
               />
+            </>
+          )}
+
+          {step.key === 'extras' && (
+            <>
+              <Title kicker="Perguntas da coordenação" title="Mais algumas perguntas" hint="Estas perguntas foram pedidas pela coordenação para este mês." />
+              <div className="space-y-6">
+                {(p.customQuestions || []).map((q) => {
+                  const ans = p.customAnswers?.[q.id]?.answer || '';
+                  const set = (v: string) => p.onCustomAnswer?.(q, v);
+                  let opts: string[] = [];
+                  try { const o = JSON.parse(q.options || '[]'); if (Array.isArray(o)) opts = o.map(String); } catch { /* ignore */ }
+                  const chips = (list: string[], multi: boolean) => (
+                    <div className="flex flex-wrap gap-2">
+                      {list.map((o) => {
+                        const cur = ans.split(' | ').filter(Boolean);
+                        const on = cur.includes(o);
+                        return (
+                          <button
+                            key={o}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => set(multi ? (on ? cur.filter((x) => x !== o) : [...cur, o]).join(' | ') : o)}
+                            className={`min-h-[48px] px-4 rounded-2xl border-2 text-sm font-extrabold transition active:scale-[0.98] ${on ? 'bg-amber-400 border-amber-500 text-gray-900' : 'bg-white border-gray-200 text-gray-800'}`}
+                          >
+                            {o}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                  return (
+                    <div key={q.id}>
+                      <h3 className="text-sm font-extrabold text-gray-900 mb-2">
+                        {q.title} {q.isRequired && <span className="text-rose-600">*</span>}
+                      </h3>
+                      {q.fieldType === 'BOOLEAN' ? (
+                        chips(['Sim', 'Não'], false)
+                      ) : q.fieldType === 'RADIO' && opts.length > 0 ? (
+                        chips(opts, false)
+                      ) : q.fieldType === 'CHECKBOX' && opts.length > 0 ? (
+                        chips(opts, true)
+                      ) : (
+                        <textarea
+                          value={ans}
+                          onChange={(e) => set(e.target.value)}
+                          rows={q.fieldType === 'TEXT' ? 2 : 4}
+                          placeholder="Escreva aqui"
+                          className="w-full p-3.5 rounded-2xl border-2 border-gray-200 text-base font-medium focus:border-amber-400 focus:outline-none bg-white"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
 

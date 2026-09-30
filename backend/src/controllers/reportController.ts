@@ -87,6 +87,7 @@ export const saveMonthlyReport = async (req: AuthRequest, res: Response) => {
     referenceMonthLabel,
     locationCityDate,
     pdfUrl,
+    customAnswers,
   } = req.body;
 
   const teacherId = req.user?.id;
@@ -129,6 +130,7 @@ export const saveMonthlyReport = async (req: AuthRequest, res: Response) => {
           : undefined,
         referenceMonthLabel: referenceMonthLabel || undefined,
         locationCityDate: locationCityDate || undefined,
+        customAnswers: customAnswers && typeof customAnswers === 'object' ? JSON.stringify(customAnswers) : undefined,
         pdfUrl: pdfUrl || undefined,
         status: pdfUrl ? 'SUBMITTED' : 'DRAFT',
       },
@@ -157,6 +159,7 @@ export const saveMonthlyReport = async (req: AuthRequest, res: Response) => {
           : null,
         referenceMonthLabel: referenceMonthLabel || null,
         locationCityDate: locationCityDate || null,
+        customAnswers: customAnswers && typeof customAnswers === 'object' ? JSON.stringify(customAnswers) : null,
         pdfUrl: pdfUrl || null,
         googleDriveFileId: null,
         status: pdfUrl ? 'SUBMITTED' : 'DRAFT',

@@ -16,6 +16,7 @@ model User {
   password           String
   role               String   @default("TEACHER")
   mustChangePassword Boolean  @default(true)
+  isActive           Boolean  @default(true)
   avatarColor        String   @default("#8F94FB")
   initialAvatar      String?
   createdAt          DateTime @default(now())
@@ -26,6 +27,7 @@ model User {
   rehearsalPhotos    RehearsalPhoto[]
   eventSessions      EventSession[]
   monthlyReports     MonthlyReport[]
+  alerts             AdminAlert[] @relation("AlertTeacher")
 }
 
 model School {
@@ -189,6 +191,7 @@ model MonthlyReport {
   pdfUrl                  String?
   googleDriveFileId       String?
   adminFeedback           String?  // JSON array of admin questions/comments
+  customAnswers           String?  // JSON: respostas às perguntas personalizadas {id: {title, answer}}
   status                  String   @default("DRAFT") // 'DRAFT', 'SUBMITTED', 'REVISION_REQUESTED', 'SYNCED'
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -221,7 +224,8 @@ model CustomQuestion {
   isActive    Boolean  @default(true)
   options     String?  // JSON array of strings for radio/checkbox options
   scopeType   String   @default("GLOBAL") // 'GLOBAL', 'TEACHER', 'SCHOOL'
-  scopeId     String?  // teacherId or schoolId if restricted
+  scopeId     String?  // legado (um único professor/escola)
+  teacherIds  String?  // JSON: ids dos professores vinculados (vazio/GLOBAL = todos)
   order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -242,4 +246,31 @@ model MonthlySnapshot {
   markdown    String   // versão legível (também enviada ao Drive)
   driveFileId String?
   generatedAt DateTime @default(now())
+}
+
+// Alertas cadastrados pela administração (para um professor ou para todos).
+model AdminAlert {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  severity    String   @default("INFO") // 'INFO', 'WARNING', 'URGENT'
+  teacherId   String?  // null = todos os professores
+  dueDate     DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  teacher User?        @relation("AlertTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  acks    AlertAck[]
+}
+
+// Professor marcou o alerta como lido ("Entendi").
+model AlertAck {
+  id        String   @id @default(uuid())
+  alertId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  alert AdminAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, userId])
 }

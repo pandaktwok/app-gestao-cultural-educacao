@@ -58,6 +58,8 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
 
   // Questionnaire States (Sections 1 - 6)
   const [activitiesFocus, setActivitiesFocus] = useState('');
+  const [customQuestions, setCustomQuestions] = useState<{ id: string; title: string; fieldType: string; isRequired: boolean; options?: string | null }[]>([]);
+  const [customAnswers, setCustomAnswers] = useState<{ [id: string]: { title: string; answer: string } }>({});
   const [eventPublicCounts, setEventPublicCounts] = useState<{ [eventId: string]: number }>({});
   const [impactIndicators, setImpactIndicators] = useState('');
   const [monitoringEvaluation, setMonitoringEvaluation] = useState('');
@@ -101,6 +103,7 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
     setImpactIndicators('');
     setMonitoringEvaluation('');
     setEventPublicCounts({});
+    setCustomAnswers({});
     setHasDifficulties(false);
     setDifficultiesDetails(STANDARD_NO_DIFFICULTIES_TEXT);
     setAchievedResults(STANDARD_SOLUTIONS_NO_NEED_TEXT);
@@ -142,8 +145,18 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
         setSelectedEventPhotoIds(allEventPhotoIds);
 
         // Parse Report Response
+        try {
+          const q = await api.get('/questionnaire/mine');
+          if (Array.isArray(q.data)) setCustomQuestions(q.data);
+        } catch {
+          /* sem perguntas extras */
+        }
+
         if (reportRes.data) {
           const r = reportRes.data;
+          if (r.customAnswers) {
+            try { setCustomAnswers(JSON.parse(r.customAnswers)); } catch { setCustomAnswers({}); }
+          }
           if (r.projectTitle) setProjectTitle(r.projectTitle);
           if (r.grantorName) setGrantorName(r.grantorName);
           if (r.fundingAgreementNo) setFundingAgreementNo(r.fundingAgreementNo);
@@ -354,7 +367,8 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
         difficultiesDetails,
         achievedResults,
         selectedRehearsalPhotos: selectedRehearsalIds,
-        selectedEventPhotos: selectedEventPhotoIds
+        selectedEventPhotos: selectedEventPhotoIds,
+        customAnswers
       });
       return true;
     } catch {
@@ -384,7 +398,8 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
           difficultiesDetails,
           achievedResults,
           selectedRehearsalPhotos: selectedRehearsalIds,
-          selectedEventPhotos: selectedEventPhotoIds
+          selectedEventPhotos: selectedEventPhotoIds,
+          customAnswers
         });
       }
       alert('Relatório Mensal salvo e parametrizado com sucesso!');
@@ -465,6 +480,9 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
         instructorName: instructorNameFormatted,
         locationCityDate,
         nominataColumns,
+        extras: customQuestions
+          .map((q) => ({ title: q.title, answer: customAnswers[q.id]?.answer || '' }))
+          .filter((x) => x.answer.trim()),
         texts: {
           activitiesFocus,
           impactIndicators,
@@ -840,6 +858,9 @@ export const FolderMonthlyReport: React.FC<FolderMonthlyReportProps> = ({
           setImpactIndicators={setImpactIndicators}
           monitoringEvaluation={monitoringEvaluation}
           setMonitoringEvaluation={setMonitoringEvaluation}
+          customQuestions={customQuestions}
+          customAnswers={customAnswers}
+          onCustomAnswer={(q, answer) => setCustomAnswers((prev) => ({ ...prev, [q.id]: { title: q.title, answer } }))}
           hasDifficulties={hasDifficulties}
           onToggleDifficulties={handleDifficultiesToggle}
           difficultiesDetails={difficultiesDetails}

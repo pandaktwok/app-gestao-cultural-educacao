@@ -37,6 +37,8 @@ export interface SccsReportPayload {
     difficultiesDetails: string;
     achievedResults: string;
   };
+  /** Respostas às perguntas extras cadastradas pela coordenação (opcional). */
+  extras?: { title: string; answer: string }[];
   stats: {
     totalStudents: number;
     boys: number;
@@ -193,6 +195,9 @@ export function buildSccsSpec(p: SccsReportPayload, photoFiles: (string | null)[
       texto: t.hasDifficulties ? t.achievedResults.trim() || TODO : NO_ACTIONS,
     },
   ];
+  (p.extras || [])
+    .filter((x) => x.answer && x.answer.trim())
+    .forEach((x, i) => blocksText.push({ kind: 'secao', n: 7 + i, titulo: x.title, texto: x.answer.trim() } as any));
   let page: any[] = [];
   let used = 0;
   const flush = () => {

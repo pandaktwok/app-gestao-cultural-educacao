@@ -8,6 +8,7 @@ import {
   getSchoolDetails,
   getAlertsSummary,
   getAttendanceTimeline,
+  getSchoolImpact,
 } from '../controllers/schoolController.js';
 import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
 
@@ -19,6 +20,7 @@ router.get('/alerts/summary', authenticateToken, requireAdmin, getAlertsSummary)
 router.get('/:id/details', authenticateToken, getSchoolDetails);
 router.post('/', authenticateToken, requireAdmin, createSchool);
 router.post('/:id/end-visit', authenticateToken, endVisit);
+router.get('/:id/impact', authenticateToken, requireAdmin, getSchoolImpact);
 router.put('/:id', authenticateToken, requireAdmin, updateSchool);
 router.delete('/:id', authenticateToken, requireAdmin, deleteSchool);
 

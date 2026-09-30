@@ -33,11 +33,15 @@ export const authenticateToken = async (
         email: true,
         role: true,
         mustChangePassword: true,
+        isActive: true,
       },
     });
 
     if (!user) {
       return res.status(401).json({ error: 'Usuário não encontrado' });
+    }
+    if (user.isActive === false) {
+      return res.status(403).json({ error: 'Acesso desativado' });
     }
 
     req.user = {

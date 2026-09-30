@@ -22,8 +22,42 @@ export const getQuestions = async (req: AuthRequest, res: Response) => {
   }
 };
 
+const parseIds = (raw: string | null | undefined): string[] => {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Uma pergunta vale para o professor quando é de "todos" (sem professores vinculados) ou ele está na lista.
+export const questionAppliesTo = (q: { scopeType: string; scopeId: string | null; teacherIds: string | null }, teacherId: string) => {
+  const ids = parseIds(q.teacherIds);
+  if (q.scopeType === 'TEACHER' && q.scopeId && !ids.includes(q.scopeId)) ids.push(q.scopeId); // legado
+  if (ids.length === 0) return q.scopeType !== 'TEACHER';
+  return ids.includes(teacherId);
+};
+
+// Perguntas ativas que o professor logado deve responder no relatório.
+export const getMyQuestions = async (req: AuthRequest, res: Response) => {
+  try {
+    const all = await prisma.customQuestion.findMany({ where: { isActive: true }, orderBy: { order: 'asc' } });
+    return res.json(all.filter((q) => questionAppliesTo(q, req.user!.id)));
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar perguntas' });
+  }
+};
+
+// teacherIds: array de professores (vazio = todos os professores)
+const normalizeTeacherIds = (teacherIds: unknown): string | null => {
+  if (!Array.isArray(teacherIds) || teacherIds.length === 0) return null;
+  return JSON.stringify(teacherIds.map(String));
+};
+
 export const createQuestion = async (req: AuthRequest, res: Response) => {
-  const { title, fieldType, isRequired, options, scopeType, scopeId, order } = req.body;
+  const { title, fieldType, isRequired, options, teacherIds, order } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'O título da pergunta é obrigatório' });
@@ -36,8 +70,9 @@ export const createQuestion = async (req: AuthRequest, res: Response) => {
         fieldType: fieldType || 'TEXTAREA',
         isRequired: isRequired !== undefined ? !!isRequired : true,
         options: Array.isArray(options) ? JSON.stringify(options) : (options || null),
-        scopeType: scopeType || 'GLOBAL',
-        scopeId: scopeId || null,
+        teacherIds: normalizeTeacherIds(teacherIds),
+        scopeType: Array.isArray(teacherIds) && teacherIds.length > 0 ? 'TEACHER' : 'GLOBAL',
+        scopeId: null,
         order: order || 0,
       },
     });
@@ -51,7 +86,7 @@ export const createQuestion = async (req: AuthRequest, res: Response) => {
 
 export const updateQuestion = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { title, fieldType, isRequired, options, scopeType, scopeId, order } = req.body;
+  const { title, fieldType, isRequired, options, teacherIds, order } = req.body;
 
   try {
     const data: any = {};
@@ -61,8 +96,11 @@ export const updateQuestion = async (req: AuthRequest, res: Response) => {
     if (options !== undefined) {
       data.options = Array.isArray(options) ? JSON.stringify(options) : options;
     }
-    if (scopeType) data.scopeType = scopeType;
-    if (scopeId !== undefined) data.scopeId = scopeId;
+    if (teacherIds !== undefined) {
+      data.teacherIds = normalizeTeacherIds(teacherIds);
+      data.scopeType = data.teacherIds ? 'TEACHER' : 'GLOBAL';
+      data.scopeId = null;
+    }
     if (order !== undefined) data.order = Number(order);
 
     const question = await prisma.customQuestion.update({

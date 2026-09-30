@@ -43,6 +43,7 @@ export default function HomePage() {
   const [teacherSchools, setTeacherSchools] = useState<SchoolItem[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<SchoolItem | null>(null);
   const [pendingFeedbackReports, setPendingFeedbackReports] = useState<any[]>([]);
+  const [teacherAlerts, setTeacherAlerts] = useState<any[]>([]);
 
   useEffect(() => {
     // Online/Offline detection
@@ -62,6 +63,7 @@ export default function HomePage() {
         } else if (parsed.role === 'TEACHER') {
           fetchTeacherSchools();
           fetchPendingFeedback();
+          fetchTeacherAlerts();
         }
       } catch (err) {
         console.error(err);
@@ -82,6 +84,26 @@ export default function HomePage() {
       }
     } catch (err) {
       console.error('Error fetching teacher schools:', err);
+    }
+  };
+
+  const fetchTeacherAlerts = async () => {
+    try {
+      if (isOnline()) {
+        const res = await api.get('/alerts/mine');
+        if (Array.isArray(res.data)) setTeacherAlerts(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching alerts:', err);
+    }
+  };
+
+  const ackAlert = async (id: string) => {
+    setTeacherAlerts((list) => list.filter((a) => a.id !== id));
+    try {
+      await api.post(`/alerts/${id}/ack`);
+    } catch {
+      fetchTeacherAlerts();
     }
   };
 
@@ -273,6 +295,34 @@ export default function HomePage() {
 
       {/* Upcoming Event Quick Notification Banner */}
       <EventNotificationBanner activeSchoolId={selectedSchool?.id} />
+
+      {/* Avisos da coordenação */}
+      {user.role === 'TEACHER' && teacherAlerts.length > 0 && (
+        <div className="px-3 pt-3 space-y-2">
+          {teacherAlerts.map((a) => (
+            <div
+              key={a.id}
+              role="alert"
+              className={`max-w-6xl mx-auto rounded-2xl border-2 p-3.5 flex items-start gap-3 ${
+                a.severity === 'URGENT' ? 'bg-rose-50 border-rose-300' : a.severity === 'WARNING' ? 'bg-amber-50 border-amber-300' : 'bg-sky-50 border-sky-200'
+              }`}
+            >
+              <span className="text-xl leading-none mt-0.5" aria-hidden>{a.severity === 'URGENT' ? '🚨' : a.severity === 'WARNING' ? '⚠️' : '📢'}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold text-gray-900">{a.title}</p>
+                <p className="text-sm text-gray-700 font-medium whitespace-pre-line mt-0.5">{a.message}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => ackAlert(a.id)}
+                className="min-h-[44px] px-4 rounded-full bg-charcoal text-white text-xs font-extrabold shrink-0 active:scale-[0.97]"
+              >
+                Entendi
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Yellow Revision Banner for Admin Pendencies */}
       {user.role === 'TEACHER' && pendingFeedbackReports.length > 0 && (

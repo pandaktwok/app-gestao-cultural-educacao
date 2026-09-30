@@ -8,6 +8,7 @@ import sessionRoutes from './routes/sessionRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import questionnaireRoutes from './routes/questionnaireRoutes.js';
 import certificateRoutes from './routes/certificateRoutes.js';
+import alertRoutes from './routes/alertRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { SCCS_LOGOS_DIR } from './services/sccsReportService.js';
 
@@ -32,6 +33,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/questionnaire', questionnaireRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/alerts', alertRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

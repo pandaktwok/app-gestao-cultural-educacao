@@ -43,3 +43,6 @@ Thumbs.db
 # Python cache
 __pycache__/
 *.pyc
+
+# Dados gerados em execução (cópias mensais de estatísticas)
+backend/data/

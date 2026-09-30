@@ -23,6 +23,7 @@ const payloadSchema = z.object({
     difficultiesDetails: str(),
     achievedResults: str(),
   }),
+  extras: z.array(z.object({ title: str(300), answer: str(3000) })).max(20).optional(),
   stats: z.object({
     totalStudents: z.number(),
     boys: z.number(),

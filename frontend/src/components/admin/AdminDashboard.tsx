@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { RelatorioGeralMensal, RelatorioAnual } from './RelatorioGeral';
 import { ConfiguracoesDrive } from './ConfiguracoesDrive';
+import { TeacherActions, SchoolActions, AlertasAdmin, TeacherPicker, QuestionLinkModal, questionTargetLabel, InactiveBadge } from './CadastrosAdmin';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Users, School as SchoolIcon, Filter, Key, Plus, FileSpreadsheet, Link as LinkIcon, BarChart3, Calendar as CalendarIcon, MapPin, X, Phone, Mail, UserCheck, Clock, Award, AlertTriangle, Eye, ChevronRight, FileText, ShieldCheck } from 'lucide-react';
 import { BentoCard } from '../bento/BentoCard';
 import { api } from '../../lib/api';
@@ -21,6 +23,7 @@ interface Teacher {
   avatarColor: string;
   initialAvatar: string;
   mustChangePassword: boolean;
+  isActive?: boolean;
   teacherSchools?: { school: School }[];
 }
 
@@ -349,7 +352,9 @@ export const AdminDashboard: React.FC = () => {
   const [customQuestions, setCustomQuestions] = useState<any[]>([]);
   const [newQTitle, setNewQTitle] = useState('');
   const [newQFieldType, setNewQFieldType] = useState('TEXTAREA');
-  const [newQScopeType, setNewQScopeType] = useState('GLOBAL');
+  const [newQTeacherIds, setNewQTeacherIds] = useState<string[]>([]);
+  const [linkingQuestion, setLinkingQuestion] = useState<any | null>(null);
+  const [questionToDelete, setQuestionToDelete] = useState<any | null>(null);
   const [newQRequired, setNewQRequired] = useState(true);
 
   useEffect(() => {
@@ -376,26 +381,26 @@ export const AdminDashboard: React.FC = () => {
       await api.post('/questionnaire', {
         title: newQTitle,
         fieldType: newQFieldType,
-        scopeType: newQScopeType,
+        teacherIds: newQTeacherIds,
         isRequired: newQRequired,
         order: customQuestions.length + 1,
       });
       setNewQTitle('');
+      setNewQTeacherIds([]);
       fetchCustomQuestions();
-      alert('Pergunta personalizada criada com sucesso!');
     } catch (err) {
       console.error('Error creating question:', err);
     }
   };
 
-  const handleDeleteQuestion = async (id: string) => {
-    if (confirm('Deseja excluir esta pergunta do questionário?')) {
-      try {
-        await api.delete(`/questionnaire/${id}`);
-        fetchCustomQuestions();
-      } catch (err) {
-        console.error('Error deleting question:', err);
-      }
+  const handleDeleteQuestion = async () => {
+    if (!questionToDelete) return;
+    try {
+      await api.delete(`/questionnaire/${questionToDelete.id}`);
+      setQuestionToDelete(null);
+      fetchCustomQuestions();
+    } catch (err) {
+      console.error('Error deleting question:', err);
     }
   };
 
@@ -695,18 +700,6 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleDeletePhotoAudit = async (type: 'rehearsal' | 'event', photoId: string) => {
-    if (confirm(`Tem certeza que deseja excluir esta foto de ${type === 'rehearsal' ? 'ensaio' : 'evento'}?`)) {
-      try {
-        await api.delete(`/reports/photos/${type}/${photoId}`);
-        alert('Foto excluída com sucesso!');
-        fetchData();
-      } catch (err: any) {
-        alert(err.response?.data?.error || 'Erro ao excluir foto');
-      }
-    }
-  };
-
   // Filtered metrics & hierarchical available schools logic
   const availableSchools = useMemo(() => {
     if (selectedTeacherId === 'ALL') return schools;
@@ -984,9 +977,9 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {teachers.map((teacher) => (
-              <div key={teacher.id} className="bento-card p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+            {teachers.filter((t) => t.role === 'TEACHER').map((teacher) => (
+              <div key={teacher.id} className={`bento-card p-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-3 ${teacher.isActive === false ? 'opacity-70' : ''}`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1 basis-[230px]">
                   <div
                     style={{ backgroundColor: teacher.avatarColor }}
                     className="w-12 h-12 rounded-full text-white font-extrabold flex items-center justify-center shadow-md"
@@ -994,7 +987,8 @@ export const AdminDashboard: React.FC = () => {
                     {teacher.initialAvatar}
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-base text-gray-900">{teacher.name}</h4>
+                    <h4 className="font-extrabold text-base text-gray-900 truncate">{teacher.name}</h4>
+                    {teacher.isActive === false && <InactiveBadge />}
                     <p className="text-xs text-gray-500 font-medium">
                       CPF: <strong>{teacher.cpf || 'Não cadastrado'}</strong> • {teacher.phone || teacher.email}
                     </p>
@@ -1011,14 +1005,11 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openSchoolLinkModal(teacher)}
-                  className="p-2.5 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
-                  title="Vincular Escolas"
-                >
-                  <LinkIcon size={16} />
-                </button>
+                <TeacherActions
+                  teacher={teacher as any}
+                  onLinkSchools={() => openSchoolLinkModal(teacher)}
+                  onChanged={fetchData}
+                />
               </div>
             ))}
           </div>
@@ -1043,9 +1034,9 @@ export const AdminDashboard: React.FC = () => {
               <div
                 key={school.id}
                 onClick={() => openSchoolDetailsModal(school.id)}
-                className="bento-card p-5 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all"
+                className="bento-card p-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-3 cursor-pointer hover:shadow-lg transition-all"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1 basis-[230px]">
                   <div
                     style={{ backgroundColor: school.themeColor }}
                     className="w-12 h-12 rounded-2xl text-white font-extrabold flex items-center justify-center shadow-md"
@@ -1061,9 +1052,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                  <span className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1 rounded-full hidden sm:inline">
                     {school._count?.students || 0} alunos
                   </span>
+                  <SchoolActions school={school} onChanged={fetchData} />
                   <button
                     type="button"
                     className="p-2 bg-adminBlue text-white rounded-full hover:bg-black transition shadow"
@@ -1265,6 +1257,11 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Quem responde esta pergunta?</label>
+              <TeacherPicker teachers={teachers as any} value={newQTeacherIds} onChange={setNewQTeacherIds} />
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t">
               <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700">
                 <input
@@ -1311,12 +1308,22 @@ export const AdminDashboard: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-[10px] font-bold text-gray-500 uppercase">
-                          Tipo: {q.fieldType} • {q.isRequired ? 'Obrigatória' : 'Opcional'} • Escopo: {q.scopeType}
+                          Tipo: {q.fieldType} • {q.isRequired ? 'Obrigatória' : 'Opcional'}
                         </span>
+                        <p className="text-[11px] font-bold text-indigo-700 mt-0.5">
+                          👤 {questionTargetLabel(q, teachers as any)}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setLinkingQuestion(q)}
+                        className="px-3 py-1.5 rounded-full text-xs font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition"
+                      >
+                        Vincular
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleToggleQuestionActive(q.id)}
@@ -1327,7 +1334,7 @@ export const AdminDashboard: React.FC = () => {
 
                       <button
                         type="button"
-                        onClick={() => handleDeleteQuestion(q.id)}
+                        onClick={() => setQuestionToDelete(q)}
                         className="px-3 py-1.5 rounded-full text-xs font-extrabold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition"
                       >
                         Excluir
@@ -1345,7 +1352,7 @@ export const AdminDashboard: React.FC = () => {
       {activeTab === 'NOTIFICATIONS' && (
         <div className="space-y-6 animate-fadeIn">
           {/* Header Banner */}
-          <div className="bento-card p-6 bg-gradient-to-r from-rose-900 via-rose-950 to-gray-900 text-white border border-rose-700/80 shadow-xl space-y-3">
+          <div className="bento-card p-6 bg-rose-950 text-white border border-rose-700/80 shadow-xl space-y-3">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-rose-500 text-white rounded-2xl shrink-0 shadow-lg">
                 <AlertTriangle size={26} />
@@ -1363,6 +1370,8 @@ export const AdminDashboard: React.FC = () => {
               Consolidado em tempo real de alunos com 3 ou mais faltas consecutivas nos ensaios diários e acompanhamento de relatórios mensais pendentes de envio.
             </p>
           </div>
+
+          <AlertasAdmin teachers={teachers as any} />
 
           {/* Stat Cards Bento UI */}
           {alertsSummary && (
@@ -2177,6 +2186,24 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      {linkingQuestion && (
+        <QuestionLinkModal
+          question={linkingQuestion}
+          teachers={teachers as any}
+          onClose={() => setLinkingQuestion(null)}
+          onSaved={() => { setLinkingQuestion(null); fetchCustomQuestions(); }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!questionToDelete}
+        title="Excluir esta pergunta?"
+        confirmLabel="Excluir"
+        onCancel={() => setQuestionToDelete(null)}
+        onConfirm={handleDeleteQuestion}
+      >
+        <p>"{questionToDelete?.title}" será removida do questionário. Respostas já enviadas nos relatórios continuam guardadas.</p>
+      </ConfirmDialog>
       </main>
     </div>
   );
